@@ -39,6 +39,28 @@ DeepSeek Harness 的 VS Code 客户端。它把 Harness Web 界面以紧凑的�
 
 ---
 
+## 项目截图
+
+### Chat 视图
+
+流式对话、思考过程、工具调用展示：
+
+![Chat 视图](media/screenshot-chat.png)
+
+### Settings 视图
+
+配置 provider / model / API endpoint / 权限策略 / API Key：
+
+![Settings 视图](media/screenshot-settings.png)
+
+### Trajectory 视图
+
+按回合与步骤回放完整执行轨迹，支持导出：
+
+![Trajectory 视图](media/screenshot-trajectory.png)
+
+---
+
 ## 架构概览
 
 ```
