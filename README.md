@@ -41,23 +41,13 @@ DeepSeek Harness 的 VS Code 客户端。它把 Harness Web 界面以紧凑的�
 
 ## 项目截图
 
-### Chat 视图
-
-流式对话、思考过程、工具调用展示：
-
-![Chat 视图](media/screenshot-chat.png)
-
-### Settings 视图
-
-配置 provider / model / API endpoint / 权限策略 / API Key：
-
-![Settings 视图](media/screenshot-settings.png)
-
-### Trajectory 视图
-
-按回合与步骤回放完整执行轨迹，支持导出：
-
-![Trajectory 视图](media/screenshot-trajectory.png)
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="media/screenshot-chat.png" alt="Chat 视图"/><br/><b>Chat 视图</b><br/>流式对话、思考过程、工具调用展示</td>
+    <td align="center" width="33%"><img src="media/screenshot-settings.png" alt="Settings 视图"/><br/><b>Settings 视图</b><br/>配置 provider / model / API endpoint / 权限策略 / API Key</td>
+    <td align="center" width="33%"><img src="media/screenshot-trajectory.png" alt="Trajectory 视图"/><br/><b>Trajectory 视图</b><br/>按回合与步骤回放完整执行轨迹，支持导出</td>
+  </tr>
+</table>
 
 ---
 
@@ -144,12 +134,24 @@ npm run package:mac-arm64
 
 ## 安装（macOS Apple Silicon）
 
-1. 在 VS Code 中打开扩展视图（Extensions）。
-2. 点击右上角 `…` → **Install from VSIX…**。
-3. 选择 `deepseek-harness-vscode-darwin-arm64-0.1.1.vsix`。
+### 方式一：从 GitHub Release 下载（推荐）
+
+1. 前往 [Releases 页面](https://github.com/YSH-Forts/deepseek-harness-vscode-sidebar/releases)，下载最新版本的 `deepseek-harness-vscode-darwin-arm64-*.vsix` 文件。
+2. 在 VS Code 中打开扩展视图（Extensions）。
+3. 点击右上角 `…` → **Install from VSIX…**，选择刚下载的 `.vsix` 文件。
 4. 安装完成后重载 VS Code。
-5. 点击 Activity Bar 中的 **DeepSeek** 图标。
-6. 在 Chat 视图点击设置按钮，配置 API key。
+5. 点击 Activity Bar 中的 **DeepSeek** 图标，在 Chat 视图的设置按钮中配置 API key。
+
+### 方式二：本地构建打包
+
+在 Apple Silicon macOS 上，从源码构建并打包：
+
+```bash
+npm install
+npm run package:mac-arm64
+```
+
+产物为 `deepseek-harness-vscode-darwin-arm64-0.1.1.vsix`，随后按「方式一」的第 2–5 步安装即可。
 
 ---
 
