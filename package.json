@@ -1,0 +1,170 @@
+{
+  "name": "deepseek-harness-vscode",
+  "displayName": "DeepSeek Harness",
+  "description": "DeepSeek Harness coding agent for Visual Studio Code",
+  "version": "0.1.1",
+  "publisher": "deepseek-harness",
+  "license": "MIT",
+  "os": ["darwin"],
+  "cpu": ["arm64"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/YSH-Forts/deepseek_harness.git"
+  },
+  "engines": {
+    "vscode": "^1.96.0"
+  },
+  "categories": [
+    "Machine Learning",
+    "Other"
+  ],
+  "activationEvents": [
+    "onView:deepseekHarness.chat"
+  ],
+  "main": "./dist/extension.cjs",
+  "contributes": {
+    "commands": [
+      {
+        "command": "deepseekHarness.newSession",
+        "title": "DeepSeek Harness: New Session",
+        "icon": "$(add)"
+      },
+      {
+        "command": "deepseekHarness.restartRuntime",
+        "title": "DeepSeek Harness: Restart Runtime",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "deepseekHarness.addSelection",
+        "title": "DeepSeek Harness: Add Selection to Context"
+      }
+    ],
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "deepseekHarness",
+          "title": "DeepSeek",
+          "icon": "media/deepseek.svg"
+        }
+      ]
+    },
+    "views": {
+      "deepseekHarness": [
+        {
+          "type": "webview",
+          "id": "deepseekHarness.chat",
+          "name": "Chat"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "deepseekHarness.newSession",
+          "when": "view == deepseekHarness.chat",
+          "group": "navigation@1"
+        },
+        {
+          "command": "deepseekHarness.restartRuntime",
+          "when": "view == deepseekHarness.chat",
+          "group": "navigation@2"
+        }
+      ],
+      "editor/context": [
+        {
+          "command": "deepseekHarness.addSelection",
+          "when": "editorHasSelection",
+          "group": "navigation"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "DeepSeek Harness",
+      "properties": {
+        "deepseekHarness.runtime.command": {
+          "type": "string",
+          "default": "",
+          "description": "DeepSeek Harness Python runtime executable. Leave empty to use the bundled runtime that ships with the extension."
+        },
+        "deepseekHarness.runtime.arguments": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "sdk"
+          ],
+          "description": "Arguments for the runtime executable."
+        },
+        "deepseekHarness.dataDir": {
+          "type": "string",
+          "default": "",
+          "description": "DeepSeek Harness home directory. Defaults to ~/.dsh, shared with the web harness so API keys configured there are reused. Override only if you use a custom DSH_DATA_DIR."
+        },
+        "deepseekHarness.sessionCompression": {
+          "type": "string",
+          "enum": [
+            "zstd",
+            "none"
+          ],
+          "default": "zstd",
+          "description": "Session log compression. Defaults to zstd to match the web harness so session history is shared."
+        },
+        "deepseekHarness.provider": {
+          "type": "string",
+          "default": "deepseek-official"
+        },
+        "deepseekHarness.model": {
+          "type": "string",
+          "default": "deepseek-v4-flash"
+        },
+        "deepseekHarness.endpoint": {
+          "type": "string",
+          "default": "",
+          "description": "Optional DeepSeek-compatible API endpoint. Leave blank to use the provider default."
+        },
+        "deepseekHarness.permissionMode": {
+          "type": "string",
+          "enum": ["read-only", "workspace-write", "danger-full-access"],
+          "default": "workspace-write",
+          "description": "Filesystem permission policy used by the Harness runtime."
+        },
+        "deepseekHarness.context.includeDiagnostics": {
+          "type": "boolean",
+          "default": true
+        },
+        "deepseekHarness.context.includeGitDiff": {
+          "type": "boolean",
+          "default": true
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "npm run build:extension && npm run build:webview",
+    "build:extension": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node20 --external:vscode --outfile=dist/extension.cjs",
+    "build:webview": "vite build",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config vitest.config.ts",
+    "package": "vsce package --target darwin-arm64",
+    "package:mac-arm64": "npm run build && vsce package --target darwin-arm64"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "react-markdown": "^10.1.0",
+    "remark-gfm": "^4.0.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/react": "^18.3.1",
+    "@types/react-dom": "^18.3.0",
+    "@types/vscode": "^1.96.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "@vscode/vsce": "^3.9.2",
+    "esbuild": "^0.25.0",
+    "typescript": "^5.7.0",
+    "vite": "^6.0.0",
+    "vitest": "^3.0.0"
+  }
+}
