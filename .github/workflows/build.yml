@@ -56,7 +56,19 @@ jobs:
         shell: bash
         run: |
           cd python-src/deepseek-harness-python
-          pyinstaller --clean --noconfirm dsh_py.spec
+          # Build without relying on dsh_py.spec (not committed upstream).
+          # Equivalent to the spec: entry __main__, pathex=src, collect data,
+          # exclude tkinter/test/unittest/pytest.
+          pyinstaller \
+            --clean --noconfirm --onefile \
+            --name dsh-py \
+            --paths src \
+            --collect-data deepseek_harness_py \
+            --exclude-module tkinter \
+            --exclude-module test \
+            --exclude-module unittest \
+            --exclude-module pytest \
+            src/deepseek_harness_py/__main__.py
           ls -la dist/
 
       - name: Upload runtime binary
