@@ -5,8 +5,6 @@
   "version": "0.1.1",
   "publisher": "deepseek-harness",
   "license": "MIT",
-  "os": ["darwin"],
-  "cpu": ["arm64"],
   "repository": {
     "type": "git",
     "url": "https://github.com/YSH-Forts/deepseek_harness.git"
@@ -146,8 +144,12 @@
     "build:webview": "vite build",
     "typecheck": "tsc --noEmit",
     "test": "vitest run --config vitest.config.ts",
-    "package": "vsce package --target darwin-arm64",
-    "package:mac-arm64": "npm run build && vsce package --target darwin-arm64"
+    "package": "vsce package",
+    "package:darwin-arm64": "npm run build && vsce package --target darwin-arm64",
+    "package:darwin-x64": "npm run build && vsce package --target darwin-x64",
+    "package:win32-x64": "npm run build && vsce package --target win32-x64",
+    "package:linux-x64": "npm run build && vsce package --target linux-x64",
+    "package:all": "npm run build && vsce package --target darwin-arm64 --target darwin-x64 --target win32-x64 --target linux-x64"
   },
   "dependencies": {
     "react": "^18.3.1",

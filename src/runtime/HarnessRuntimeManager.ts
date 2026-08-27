@@ -56,7 +56,8 @@ export class HarnessRuntimeManager implements vscode.Disposable {
   private resolveCommand(config: vscode.WorkspaceConfiguration): string {
     const configured = config.get<string>('runtime.command')
     if (configured !== undefined && configured.trim() !== '') return configured
-    return join(this.context.extensionUri.fsPath, 'bin', process.platform === 'win32' ? 'dsh-py.exe' : 'dsh-py')
+    const binary = process.platform === 'win32' ? 'dsh-py.exe' : 'dsh-py'
+    return join(this.context.extensionUri.fsPath, 'bin', binary)
   }
 
   // The runtime reuses the same DeepSeek Harness home directory as the web

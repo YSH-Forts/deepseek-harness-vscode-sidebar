@@ -14,7 +14,7 @@ DeepSeek Harness 的 VS Code 客户端。它把 Harness Web 界面以紧凑的�
 - [前置要求](#前置要求)
 - [开发环境搭建](#开发环境搭建)
 - [构建与打包](#构建与打包)
-- [安装（macOS Apple Silicon）](#安装macos-apple-silicon)
+- [安装](#安装)
 - [配置 API Key](#配置-api-key)
 - [扩展配置项](#扩展配置项)
 - [运行时兼容性](#运行时兼容性)
@@ -88,9 +88,17 @@ Developer ──> VS Code Webview ──> Extension Host ──> DeepSeek Harnes
 - VS Code `^1.96.0`
 - Node.js 20+
 - npm
-- 首次发布目标平台：**macOS Apple Silicon（arm64）**
 
-> 当前 `package.json` 声明 `os: ["darwin"]`、`cpu: ["arm64"]`，打包产物为 `darwin-arm64` VSIX。
+支持平台：
+
+| 平台 | 目标 |
+|---|---|
+| macOS Apple Silicon | `darwin-arm64` |
+| macOS Intel | `darwin-x64` |
+| Windows x64 | `win32-x64` |
+| Linux x64 | `linux-x64` |
+
+> 每个平台都内嵌对应架构的 PyInstaller `dsh-py` 运行时二进制。由于 PyInstaller 无法交叉编译，各平台二进制通过 GitHub Actions 在对应系统上自动构建（见 [.github/workflows/build.yml](.github/workflows/build.yml)）。
 
 ---
 
@@ -116,27 +124,41 @@ npm run build       # 构建扩展 + Webview
 | `npm run build:extension` | 仅构建扩展（esbuild → `dist/extension.cjs`） |
 | `npm run build:webview` | 仅构建 Webview（Vite） |
 | `npm test` | 运行 Vitest 测试套件 |
-| `npm run package:mac-arm64` | 构建并打包 `darwin-arm64` VSIX |
+| `npm run package:darwin-arm64` | 构建并打包 `darwin-arm64` VSIX |
+| `npm run package:darwin-x64` | 构建并打包 `darwin-x64` VSIX |
+| `npm run package:win32-x64` | 构建并打包 `win32-x64` VSIX |
+| `npm run package:linux-x64` | 构建并打包 `linux-x64` VSIX |
 
 ---
 
 ## 构建与打包
 
-在 Apple Silicon macOS 上执行：
+### 方式一：GitHub Actions 自动构建（推荐）
+
+推送 `v*` 标签（或手动触发 workflow）后，[`.github/workflows/build.yml`](.github/workflows/build.yml) 会在四个系统上分别构建对应架构的 `dsh-py` 二进制，并打包出四个平台的 VSIX。推送 tag 时还会自动创建 GitHub Release 并上传全部产物。
+
+由于 PyInstaller 无法交叉编译，**Windows / Linux / macOS Intel 的二进制必须在对应系统上构建**，因此推荐使用 CI 完成多平台打包。
+
+### 方式二：本地打包当前平台
 
 ```bash
-npm run package:mac-arm64
+npm install
+npm run package:darwin-arm64   # 或 darwin-x64 / win32-x64 / linux-x64
 ```
 
-该命令等价于先 `npm run build` 再用 `vsce package --target darwin-arm64`，产物为 `deepseek-harness-vscode-darwin-arm64-0.1.1.vsix`，其中内嵌了 PyInstaller 打包的 `arm64` 运行时可执行文件。
+> 本地打包只会在当前系统上产出对应平台的 VSIX。例如在 Apple Silicon Mac 上执行 `npm run package:darwin-arm64`，产物为 `deepseek-harness-vscode-darwin-arm64-<version>.vsix`，内嵌 PyInstaller 打包的 `arm64` 运行时可执行文件。要打包其他平台，请改用 CI 或到对应系统上执行。
 
 ---
 
-## 安装（macOS Apple Silicon）
+## 安装
 
 ### 方式一：从 GitHub Release 下载（推荐）
 
-1. 前往 [Releases 页面](https://github.com/YSH-Forts/deepseek-harness-vscode-sidebar/releases)，下载最新版本的 `deepseek-harness-vscode-darwin-arm64-*.vsix` 文件。
+1. 前往 [Releases 页面](https://github.com/YSH-Forts/deepseek-harness-vscode-sidebar/releases)，按你的系统下载对应平台的 `.vsix` 文件：
+   - macOS Apple Silicon：`deepseek-harness-vscode-darwin-arm64-*.vsix`
+   - macOS Intel：`deepseek-harness-vscode-darwin-x64-*.vsix`
+   - Windows x64：`deepseek-harness-vscode-win32-x64-*.vsix`
+   - Linux x64：`deepseek-harness-vscode-linux-x64-*.vsix`
 2. 在 VS Code 中打开扩展视图（Extensions）。
 3. 点击右上角 `…` → **Install from VSIX…**，选择刚下载的 `.vsix` 文件。
 4. 安装完成后重载 VS Code。
@@ -144,14 +166,14 @@ npm run package:mac-arm64
 
 ### 方式二：本地构建打包
 
-在 Apple Silicon macOS 上，从源码构建并打包：
+在当前系统上从源码构建并打包（仅产出当前平台产物）：
 
 ```bash
 npm install
-npm run package:mac-arm64
+npm run package:darwin-arm64
 ```
 
-产物为 `deepseek-harness-vscode-darwin-arm64-0.1.1.vsix`，随后按「方式一」的第 2–5 步安装即可。
+随后按「方式一」的第 2–5 步安装即可。
 
 ---
 

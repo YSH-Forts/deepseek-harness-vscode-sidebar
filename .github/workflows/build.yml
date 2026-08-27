@@ -1,0 +1,140 @@
+name: Build & Package
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+env:
+  # The Python runtime source repository. PyInstaller cannot cross-compile, so
+  # each platform build checks out this repo and builds dsh-py natively.
+  PYTHON_REPO: https://github.com/YSH-Forts/deepseek_harness.git
+  PYTHON_REF: main
+
+jobs:
+  build-runtime:
+    name: Build runtime (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            os: macos-14
+            binary: dsh-py
+          - target: darwin-x64
+            os: macos-13
+            binary: dsh-py
+          - target: win32-x64
+            os: windows-latest
+            binary: dsh-py.exe
+          - target: linux-x64
+            os: ubuntu-latest
+            binary: dsh-py
+    steps:
+      - name: Checkout runtime source
+        uses: actions/checkout@v4
+        with:
+          repository: YSH-Forts/deepseek_harness
+          ref: ${{ env.PYTHON_REF }}
+          path: python-src
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          cd python-src/deepseek-harness-python
+          python -m pip install --upgrade pip
+          pip install '.[dev]' pyinstaller
+
+      - name: Build dsh-py with PyInstaller
+        shell: bash
+        run: |
+          cd python-src/deepseek-harness-python
+          pyinstaller --clean --noconfirm dsh_py.spec
+          ls -la dist/
+
+      - name: Upload runtime binary
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-${{ matrix.target }}
+          path: python-src/deepseek-harness-python/dist/${{ matrix.binary }}
+          if-no-files-found: error
+
+  package:
+    name: Package VSIX
+    needs: build-runtime
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: darwin-arm64
+            binary: dsh-py
+          - target: darwin-x64
+            binary: dsh-py
+          - target: win32-x64
+            binary: dsh-py.exe
+          - target: linux-x64
+            binary: dsh-py
+    steps:
+      - name: Checkout extension source
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Prepare bin directory (drop bundled dev binary)
+        run: rm -rf bin && mkdir -p bin
+
+      - name: Download runtime binary
+        uses: actions/download-artifact@v4
+        with:
+          name: runtime-${{ matrix.target }}
+          path: bin/
+
+      - name: Install npm dependencies
+        run: npm ci
+
+      - name: Build extension
+        run: npm run build
+
+      - name: Package VSIX
+        run: npx vsce package --target ${{ matrix.target }} --out deepseek-harness-vscode-${{ matrix.target }}-${{ github.ref_name }}.vsix
+
+      - name: Upload VSIX
+        uses: actions/upload-artifact@v4
+        with:
+          name: vsix-${{ matrix.target }}
+          path: '*.vsix'
+          if-no-files-found: error
+
+  release:
+    name: Create GitHub Release
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: package
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all VSIX artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-assets
+          merge-multiple: true
+
+      - name: List artifacts
+        run: ls -la release-assets/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: release-assets/**/*.vsix
+          generate_release_notes: true
