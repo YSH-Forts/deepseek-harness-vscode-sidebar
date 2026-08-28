@@ -13,7 +13,9 @@ import type { HarnessCommand, HarnessEvent, PluginInfo, SessionSummary, Settings
 const SESSION_KEY = 'deepseekHarness.sessions.v2'
 const FILE_CHANGE_KEY = 'deepseekHarness.fileChanges.v1'
 const MAX_PRESENTATION_EVENTS = 5_000
-const INITIAL_HISTORY_EVENTS = 350
+// Keep first paint light. Older events remain available through “Load earlier
+// messages”, so a large, long-lived session does not hold up opening the view.
+const INITIAL_HISTORY_EVENTS = 120
 const execFileAsync = promisify(execFile)
 interface PersistedFileChange { callId: string; sessionId: string; path: string; beforeFile?: string; afterFile?: string; decision?: 'kept' | 'reverted' }
 
@@ -265,6 +267,15 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     await this.postState()
     const adapter = await this.runtime.start()
     const settingsTask = this.refreshSettings(adapter)
+    // The active id is persisted locally. In the normal case it lets the
+    // first history page travel while the runtime scans its complete session
+    // index, rather than making those two RPCs serial.
+    const preferredId = this.activeSessionId
+    const preferredDataTask = preferredId === undefined ? undefined : Promise.all([
+      adapter.history(preferredId, { limit: INITIAL_HISTORY_EVENTS }),
+      adapter.pendingApprovals(preferredId),
+      adapter.sessionStatus(preferredId),
+    ])
     const sessions = await adapter.listSessions()
     if (generation !== this.activationGeneration) return
     const localTitles = new Map(this.sessions.map(item => [item.id, item.title]))
@@ -275,19 +286,29 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
       this.events = []
       await settingsTask; await this.persist(); await this.postState(); return
     }
-    const [historyPage, pending, status] = await Promise.all([adapter.history(id, { limit: INITIAL_HISTORY_EVENTS }), adapter.pendingApprovals(id), adapter.sessionStatus(id)])
+    const [historyPage, pending, status] = id === preferredId && preferredDataTask !== undefined
+      ? await preferredDataTask
+      : await Promise.all([adapter.history(id, { limit: INITIAL_HISTORY_EVENTS }), adapter.pendingApprovals(id), adapter.sessionStatus(id)])
     if (generation !== this.activationGeneration) return
     const history = historyPage.events
     this.historyHasMore = historyPage.hasMore
     this.historyBefore = historyPage.firstSeq
     const resolved = new Set(history.flatMap(event => event.type === 'approval.resolved' ? [event.approvalId] : []))
     const known = new Set(history.flatMap(event => event.type === 'approval.requested' ? [event.approvalId] : []))
-    await this.hydrateFileChanges(id)
-    const changes = this.persistedChanges.filter(change => change.sessionId === id && this.fileSnapshots.has(change.callId))
-    this.events = [...history, ...pending.filter(event => event.type === 'approval.requested' && !known.has(event.approvalId) && !resolved.has(event.approvalId)), { type: 'status.changed', sessionId: id, status }, ...changes.flatMap(change => [{ type: 'file.changed' as const, sessionId: id, callId: change.callId, path: change.path }, ...(change.decision === undefined ? [] : [{ type: 'file.reviewed' as const, sessionId: id, callId: change.callId, path: change.path, decision: change.decision }])])]
+    this.events = [...history, ...pending.filter(event => event.type === 'approval.requested' && !known.has(event.approvalId) && !resolved.has(event.approvalId)), { type: 'status.changed', sessionId: id, status }]
     this.subscribe(adapter, id)
     await settingsTask; await this.persist(); await this.postState()
-    await this.refreshGitChanges()
+    void this.hydrateChangesAfterFirstPaint(id, generation)
+    void this.refreshGitChanges()
+  }
+
+  private async hydrateChangesAfterFirstPaint(sessionId: string, generation: number): Promise<void> {
+    await this.hydrateFileChanges(sessionId)
+    if (generation !== this.activationGeneration || sessionId !== this.activeSessionId) return
+    const changes = this.persistedChanges.filter(change => change.sessionId === sessionId && this.fileSnapshots.has(change.callId))
+    if (changes.length === 0) return
+    this.events = [...this.events, ...changes.flatMap(change => [{ type: 'file.changed' as const, sessionId, callId: change.callId, path: change.path }, ...(change.decision === undefined ? [] : [{ type: 'file.reviewed' as const, sessionId, callId: change.callId, path: change.path, decision: change.decision }])])]
+    await this.postState()
   }
 
   private subscribe(adapter: HarnessAdapter, id: string): void {

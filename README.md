@@ -278,6 +278,7 @@ npm test
 
 ## 相关文档
 
+- [中文使用指南](docs/USER_GUIDE_CN.md)
 - [架构](docs/ARCHITECTURE.md)
 - [运行时协议](docs/RUNTIME_PROTOCOL.md)
 - [安全模型](docs/SECURITY_MODEL.md)
