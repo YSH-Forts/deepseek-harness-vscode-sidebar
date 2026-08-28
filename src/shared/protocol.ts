@@ -35,13 +35,14 @@ export interface AgentContext {
 }
 export interface WebviewState {
   runtime: { state: RuntimeState; message?: string; version?: string }; sessions: SessionSummary[]; commands: HarnessCommand[]
-  activeSessionId?: string; events: HarnessEvent[]; trajectoryEvents: Record<string, unknown>[]; plugins: PluginInfo[]; attachedFiles: string[]; settings: SettingsState; gitChanges: { path: string; status: string }[]
+  activeSessionId?: string; events: HarnessEvent[]; historyHasMore: boolean; trajectoryEvents: Record<string, unknown>[]; plugins: PluginInfo[]; attachedFiles: string[]; settings: SettingsState; gitChanges: { path: string; status: string }[]
 }
 export type WebviewToExtensionMessage =
   | { type: 'ready' } | { type: 'newSession' } | { type: 'forkSession' } | { type: 'exportSession' } | { type: 'deleteSession' } | { type: 'selectSession'; sessionId: string } | { type: 'renameSession'; sessionId: string }
   | { type: 'sendMessage'; text: string; mode?: string } | { type: 'retryMessage'; text: string } | { type: 'steerMessage'; text: string } | { type: 'openFile'; path: string; line?: number } | { type: 'cancel' } | { type: 'cancelSubagent'; sessionId: string } | { type: 'attachFiles' }
   | { type: 'removeAttachment'; path: string } | { type: 'restartRuntime' }
   | { type: 'loadTrajectory' }
+  | { type: 'loadEarlierHistory' }
   | { type: 'loadPlugins' }
   | { type: 'openDiff'; callId: string }
   | { type: 'openGitDiff' }

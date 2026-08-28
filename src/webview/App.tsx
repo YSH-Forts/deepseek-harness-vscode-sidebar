@@ -4,6 +4,7 @@ import type { ExtensionToWebviewMessage, WebviewState, WebviewToExtensionMessage
 import { Conversation } from './components/Conversation.tsx'
 import { SettingsPanel } from './components/SettingsPanel.tsx'
 import { TrajectoryPanel } from './components/TrajectoryPanel.tsx'
+import { PluginMarketPanel } from './components/PluginMarketPanel.tsx'
 
 declare function acquireVsCodeApi(): { postMessage(message: WebviewToExtensionMessage): void }
 const vscode = acquireVsCodeApi()
@@ -14,20 +15,20 @@ const MODE_OPTIONS = [
   { value: 'creator', label: 'Creator', description: 'Cordis plugin authoring setup' },
 ]
 const EMPTY: WebviewState = {
-  runtime: { state: 'stopped' }, sessions: [], commands: [], events: [], trajectoryEvents: [], plugins: [], attachedFiles: [],
+  runtime: { state: 'stopped' }, sessions: [], commands: [], events: [], historyHasMore: false, trajectoryEvents: [], plugins: [], attachedFiles: [],
   settings: { provider: 'deepseek-official', model: 'deepseek-v4-flash', endpoint: '', permissionMode: 'workspace-write', credential: { configured: false, writable: true }, loading: true }, gitChanges: [],
 }
 
 export function App(): JSX.Element {
   const [state, setState] = useState(EMPTY)
   const [text, setText] = useState('')
-  const [settingsOpen, setSettingsOpen] = useState(false), [historyOpen, setHistoryOpen] = useState(false), [trajectoryOpen, setTrajectoryOpen] = useState(false)
+  const [settingsOpen, setSettingsOpen] = useState(false), [historyOpen, setHistoryOpen] = useState(false), [trajectoryOpen, setTrajectoryOpen] = useState(false), [pluginMarketOpen, setPluginMarketOpen] = useState(false)
   const [addMenuOpen, setAddMenuOpen] = useState(false), [goalEditorOpen, setGoalEditorOpen] = useState(false), [goalText, setGoalText] = useState('')
   const [queuedMessage, setQueuedMessage] = useState<string | undefined>()
   const [queueMenuOpen, setQueueMenuOpen] = useState(false), [queueingEnabled, setQueueingEnabled] = useState(true)
   const [composerModel, setComposerModel] = useState(EMPTY.settings.model)
   const [agentMode, setAgentMode] = useState('standard')
-  const composer = useRef<HTMLTextAreaElement>(null), addMenu = useRef<HTMLDivElement>(null), queueDispatching = useRef(false)
+  const composer = useRef<HTMLTextAreaElement>(null), addMenu = useRef<HTMLDivElement>(null), queueMenu = useRef<HTMLDivElement>(null), queueDispatching = useRef(false)
 
   useEffect(() => {
     const receive = (message: MessageEvent<ExtensionToWebviewMessage>): void => {
@@ -51,6 +52,15 @@ export function App(): JSX.Element {
     document.addEventListener('pointerdown', closeOnOutsidePointer)
     return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
   }, [addMenuOpen])
+
+  useEffect(() => {
+    if (!queueMenuOpen) return
+    const closeOnOutsidePointer = (event: PointerEvent): void => {
+      if (!queueMenu.current?.contains(event.target as Node)) setQueueMenuOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOnOutsidePointer)
+    return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
+  }, [queueMenuOpen])
 
   const running = [...state.events].reverse().find(event => event.type === 'status.changed')?.type === 'status.changed'
     && [...state.events].reverse().find(event => event.type === 'status.changed')?.status === 'running'
@@ -78,6 +88,7 @@ export function App(): JSX.Element {
     setText('')
     composer.current?.focus()
   }
+  if (pluginMarketOpen) return <PluginMarketPanel plugins={state.plugins} onBack={() => setPluginMarketOpen(false)}/>
   if (settingsOpen) {
     return <SettingsPanel state={state.settings} plugins={state.plugins} onBack={() => setSettingsOpen(false)} post={message => vscode.postMessage(message)}/>
   }
@@ -90,7 +101,8 @@ export function App(): JSX.Element {
         <button className="icon-button" data-tooltip="New chat" aria-label="New chat" onClick={() => { setHistoryOpen(false); vscode.postMessage({ type: 'newSession' }) }}><ToolbarIcon kind="new"/></button>
         <button className="icon-button" data-tooltip="Chat history" aria-label="Chat history" aria-expanded={historyOpen} onClick={() => setHistoryOpen(open => !open)}><ToolbarIcon kind="history"/></button>
         <button className="icon-button" data-tooltip="View trajectory" aria-label="View trajectory" disabled={!state.activeSessionId} onClick={() => { setHistoryOpen(false); setTrajectoryOpen(true); vscode.postMessage({ type: 'loadTrajectory' }) }}><ToolbarIcon kind="trajectory"/></button>
-        <button className="icon-button" data-tooltip="Settings" aria-label="Settings" onClick={() => { setSettingsOpen(true); vscode.postMessage({ type: 'refreshSettings' }); vscode.postMessage({ type: 'loadPlugins' }) }}><ToolbarIcon kind="settings"/></button>
+        <button className="icon-button" data-tooltip="Plugin marketplace" aria-label="Plugin marketplace" onClick={() => { setHistoryOpen(false); setSettingsOpen(false); setPluginMarketOpen(true); vscode.postMessage({ type: 'loadPlugins' }) }}><ToolbarIcon kind="plugins"/></button>
+        <button className="icon-button" data-tooltip="Settings" aria-label="Settings" onClick={() => { setPluginMarketOpen(false); setSettingsOpen(true); vscode.postMessage({ type: 'refreshSettings' }); vscode.postMessage({ type: 'loadPlugins' }) }}><ToolbarIcon kind="settings"/></button>
       </div>
     </header>
 
@@ -101,11 +113,11 @@ export function App(): JSX.Element {
     {state.runtime.state === 'error' && <div className="banner error-banner"><span>{state.runtime.message ?? 'Runtime unavailable'}</span><button onClick={() => vscode.postMessage({ type: 'restartRuntime' })}>Restart</button></div>}
     {!state.settings.loading && !state.settings.credential.configured && <button className="banner credential-banner" onClick={() => setSettingsOpen(true)}><span>Configure DeepSeek API Key</span><b>Open settings →</b></button>}
 
-    <Conversation events={state.events} running={running} changedFiles={changedFiles} gitChanges={state.gitChanges} post={message => vscode.postMessage(message)} onEdit={value => { setText(value); composer.current?.focus() }}/>
+    <Conversation events={state.events} hasEarlierEvents={state.historyHasMore} running={running} changedFiles={changedFiles} gitChanges={state.gitChanges} post={message => vscode.postMessage(message)} onEdit={value => { setText(value); composer.current?.focus() }}/>
 
     <div className="composer-wrap">
       {state.attachedFiles.length > 0 && <div className="attachment-rail">{state.attachedFiles.map(path => <button key={path} title={path} onClick={() => vscode.postMessage({ type: 'removeAttachment', path })}>📎 {basename(path)} <span>×</span></button>)}</div>}
-      {queuedMessage !== undefined && <div className="queued-message"><span className="queue-mark"><QueueIcon/></span><p title={queuedMessage}>{queuedMessage}</p><button className="queue-steer" data-tooltip="Send as steering instruction" onClick={() => { vscode.postMessage({ type: 'steerMessage', text: queuedMessage }); setQueuedMessage(undefined) }}><SteerIcon/>Steer</button><button className="queue-action" data-tooltip="Remove queued message" aria-label="Remove queued message" onClick={() => setQueuedMessage(undefined)}><TrashIcon/></button><div className="queue-overflow"><button className="queue-action" data-tooltip="More queue options" aria-label="More queue options" aria-expanded={queueMenuOpen} onClick={() => setQueueMenuOpen(open => !open)}><MoreIcon/></button>{queueMenuOpen && <div className="queue-menu" role="menu"><button role="menuitem" onClick={() => { setText(queuedMessage); setQueuedMessage(undefined); setQueueMenuOpen(false); composer.current?.focus() }}><EditIcon/>Edit message</button><button role="menuitem" onClick={() => { setQueueingEnabled(false); setQueueMenuOpen(false) }}><QueueIcon/>Turn off queueing</button></div>}</div></div>}
+      {queuedMessage !== undefined && <div className="queued-message"><span className="queue-mark"><QueueIcon/></span><p title={queuedMessage}>{queuedMessage}</p><button className="queue-steer" data-tooltip="Send as steering instruction" onClick={() => { vscode.postMessage({ type: 'steerMessage', text: queuedMessage }); setQueuedMessage(undefined) }}><SteerIcon/>Steer</button><button className="queue-action" data-tooltip="Remove queued message" aria-label="Remove queued message" onClick={() => setQueuedMessage(undefined)}><TrashIcon/></button><div className="queue-overflow" ref={queueMenu}><button className="queue-action" data-tooltip="More queue options" aria-label="More queue options" aria-expanded={queueMenuOpen} onClick={() => setQueueMenuOpen(open => !open)}><MoreIcon/></button>{queueMenuOpen && <div className="queue-menu" role="menu"><button role="menuitem" onClick={() => { setText(queuedMessage); setQueuedMessage(undefined); setQueueMenuOpen(false); composer.current?.focus() }}><EditIcon/>Edit message</button><button role="menuitem" onClick={() => { setQueueingEnabled(false); setQueueMenuOpen(false) }}><QueueIcon/>Turn off queueing</button></div>}</div></div>}
       <div className="composer">
         <textarea ref={composer} value={text} placeholder="Ask DeepSeek…" rows={2} onChange={event => setText(event.target.value)} onKeyDown={event => {
           if (event.key === 'Enter' && !event.shiftKey && !event.nativeEvent.isComposing) { event.preventDefault(); if (!event.repeat) submit() }
@@ -130,7 +142,7 @@ export function App(): JSX.Element {
             <option value="deepseek-v4-flash-vision-exp">DeepSeek V4 Flash Vision Exp</option>
             {!['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-v4-flash-vision-exp'].includes(composerModel) && <option value={composerModel}>{composerModel}</option>}
           </select>
-          <button className="context-meter" data-tooltip={`${contextPercent.toFixed(1)}% · ${formatTokenCount(contextTokens)} / 1.0M context used`} aria-label="Context usage" style={{ background: `conic-gradient(var(--dsw-brand) ${contextPercent * 3.6}deg, var(--dsw-layer-soft) 0)` }}><span/></button>
+          <button className="context-meter" data-tooltip={`${contextPercent.toFixed(1)}% · ${formatTokenCount(contextTokens)} / 1.0M context used`} aria-label="Context usage" type="button"><ContextRing percent={contextPercent}/></button>
           <button className={`send-button ${running ? 'stop-send-button' : ''}`} aria-label={running ? 'Stop current response' : 'Send message'} title={running ? 'Stop current response' : canSend ? 'Send message' : 'Configure a DeepSeek API key in Settings first'} disabled={!running && (text.trim() === '' || !canSend)} onClick={() => { if (running) vscode.postMessage({ type: 'cancel' }); else submit() }}>{running ? <StopIcon/> : <SendIcon/>}</button>
         </div>
       </div>
@@ -141,11 +153,16 @@ export function App(): JSX.Element {
 function basename(path: string): string { return path.split(/[\\/]/).at(-1) ?? path }
 function formatTokenCount(value: number): string { return value >= 1000 ? `${(value / 1000).toFixed(value >= 100_000 ? 0 : 1)}K` : String(value) }
 
-function ToolbarIcon({ kind }: { kind: 'new' | 'history' | 'trajectory' | 'settings' }): JSX.Element {
+function ToolbarIcon({ kind }: { kind: 'new' | 'history' | 'trajectory' | 'plugins' | 'settings' }): JSX.Element {
   if (kind === 'new') return <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden><path d="M12 5v14M5 12h14"/></svg>
   if (kind === 'history') return <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden><path d="M4 12a8 8 0 1 0 2.35-5.66L4 8.7M4 4v4.7h4.7M12 8v4l2.8 1.8"/></svg>
   if (kind === 'trajectory') return <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden><path d="M5 5v14M5 7h5l2 4h7M10 19h4l2-4h3"/><circle cx="10" cy="7" r="1.5"/><circle cx="12" cy="11" r="1.5"/><circle cx="14" cy="19" r="1.5"/></svg>
+  if (kind === 'plugins') return <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden><path d="M8.5 4v4M15.5 4v4M7 8h10a2 2 0 0 1 2 2v4a2 2 0 0 1-2 2h-2v3H9v-3H7a2 2 0 0 1-2-2v-4a2 2 0 0 1 2-2Z"/><path d="M9 12h.01M15 12h.01"/></svg>
   return <svg className="toolbar-icon settings-icon" viewBox="0 0 24 24" aria-hidden><path d="M9.75 3.55h4.5l.6 2.1c.46.2.89.45 1.28.76l2.1-.58 2.25 3.9-1.55 1.53c.05.47.05.95 0 1.42l1.55 1.53-2.25 3.9-2.1-.58c-.39.31-.82.56-1.28.76l-.6 2.1h-4.5l-.6-2.1c-.46-.2-.89-.45-1.28-.76l-2.1.58-2.25-3.9 1.55-1.53a6 6 0 0 1 0-1.42L3.77 9.73l2.25-3.9 2.1.58c.39-.31.82-.56 1.28-.76l.35-2.1Z"/><circle cx="12" cy="12" r="3"/></svg>
+}
+
+function ContextRing({ percent }: { percent: number }): JSX.Element {
+  return <svg viewBox="0 0 24 24" aria-hidden><circle className="context-ring-track" cx="12" cy="12" r="9"/><circle className="context-ring-value" cx="12" cy="12" r="9" pathLength="100" style={{ strokeDasharray: '100', strokeDashoffset: String(100 - percent) }}/></svg>
 }
 
 function AddIcon(): JSX.Element { return <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden><path d="M12 5v14M5 12h14"/></svg> }

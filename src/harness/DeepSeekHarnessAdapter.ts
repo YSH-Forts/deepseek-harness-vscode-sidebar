@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto'
 import type { Disposable } from 'vscode'
 import type { AgentContext, CredentialStatus, HarnessCommand, HarnessEvent, PluginInfo, SessionSummary } from '../shared/protocol.ts'
-import type { HarnessAdapter, RuntimeStatus } from './HarnessAdapter.ts'
+import type { HarnessAdapter, HistoryPage, RuntimeStatus } from './HarnessAdapter.ts'
 import { HarnessClient, isRecord, type HarnessNotification } from './HarnessClient.ts'
 import { HarnessEventMapper } from './HarnessEventMapper.ts'
 
@@ -39,7 +39,7 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
   }
   async stop(): Promise<void> { this.notificationSubscription?.dispose(); this.closeSubscription?.dispose(); const client = this.client; this.client = undefined; await client?.close(); this.setStatus({ state: 'stopped' }) }
   async createSession(): Promise<{ id: string }> { return this.resumeSession(`vscode-${randomUUID().replaceAll('-', '')}`) }
-  async resumeSession(sessionId: string): Promise<{ id: string }> { await this.required().history(sessionId); return { id: sessionId } }
+  async resumeSession(sessionId: string): Promise<{ id: string }> { await this.required().history(sessionId, { limit: 1 }); return { id: sessionId } }
   async listSessions(): Promise<SessionSummary[]> {
     return (await this.required().listSessions()).flatMap(item => typeof item.id === 'string' && typeof item.title === 'string' && typeof item.createdAt === 'number' && typeof item.updatedAt === 'number'
       ? [{ id: item.id, title: item.title, createdAt: item.createdAt, updatedAt: item.updatedAt, ...(typeof item.parentSessionId === 'string' ? { parentSessionId: item.parentSessionId } : {}) }]
@@ -66,10 +66,11 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
   deleteSession(sessionId: string): Promise<boolean> { return this.required().deleteSession(sessionId) }
   listChanges(sessionId: string): Promise<Record<string, unknown>[]> { return this.required().listChanges(sessionId) }
   reviewChange(callId: string, decision: 'kept' | 'reverted'): Promise<boolean> { return this.required().reviewChange(callId, decision) }
-  async history(sessionId: string): Promise<HarnessEvent[]> {
-    return (await this.required().history(sessionId)).flatMap(event => { const mapped = this.mapper.mapSessionEvent(sessionId, event); return mapped === undefined ? [] : [mapped] })
+  async history(sessionId: string, options: { limit?: number; before?: number } = {}): Promise<HistoryPage> {
+    const page = await this.required().history(sessionId, options)
+    return { events: page.events.flatMap(event => { const mapped = this.mapper.mapSessionEvent(sessionId, event); return mapped === undefined ? [] : [mapped] }), hasMore: page.hasMore, ...(page.firstSeq === undefined ? {} : { firstSeq: page.firstSeq }) }
   }
-  rawHistory(sessionId: string): Promise<Record<string, unknown>[]> { return this.required().history(sessionId) }
+  async rawHistory(sessionId: string): Promise<Record<string, unknown>[]> { return (await this.required().history(sessionId)).events }
   async sendMessage(sessionId: string, message: string, context: AgentContext): Promise<void> { await this.required().prompt(sessionId, formatContent(message, context)) }
   async cancel(sessionId: string): Promise<void> { if (!await this.required().cancel(sessionId)) throw new Error(`Unknown session: ${sessionId}`) }
   async steer(sessionId: string, instruction: string): Promise<void> { if (!await this.required().steer(sessionId, [{ type: 'text', text: instruction }])) throw new Error(`Unknown session: ${sessionId}`) }

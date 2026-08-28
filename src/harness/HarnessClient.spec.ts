@@ -69,8 +69,8 @@ describe('HarnessClient protocol', () => {
   it('history returns array of raw events', async () => {
     const client = startClient(echoServer())
     const events = await client.history('s1')
-    expect(events).toHaveLength(1)
-    expect(events[0]).toEqual({ type: 'user/message', seq: 1, data: { content: [{ type: 'text', text: 'hi' }] } })
+    expect(events.events).toHaveLength(1)
+    expect(events.events[0]).toEqual({ type: 'user/message', seq: 1, data: { content: [{ type: 'text', text: 'hi' }] } })
     await client.close()
   })
 

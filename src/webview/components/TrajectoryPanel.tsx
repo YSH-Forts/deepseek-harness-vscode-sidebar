@@ -1,7 +1,7 @@
 import type { HarnessEvent } from '../../shared/protocol.ts'
 
-type Step = { key: string; kind: 'reasoning' | 'assistant' | 'tool' | 'plan' | 'approval' | 'goal' | 'error'; title: string; detail?: string; status?: 'running' | 'completed' | 'failed' }
-type Turn = { key: string; prompt: string; context?: { workspace?: string; currentFile?: string }; steps: Step[] }
+type Step = { key: string; kind: 'reasoning' | 'assistant' | 'tool' | 'plan' | 'approval' | 'goal' | 'error'; title: string; detail?: string; status?: 'running' | 'completed' | 'failed'; startedAt?: number; duration?: number }
+type Turn = { key: string; prompt: string; context?: { workspace?: string; currentFile?: string }; steps: Step[]; startedAt?: number; duration?: number }
 
 export function TrajectoryPanel({ events, rawEvents, title, onBack, onExport }: { events: HarnessEvent[]; rawEvents: Record<string, unknown>[]; title?: string; onBack(): void; onExport(): void }): JSX.Element {
   const raw = buildRawTrajectory(rawEvents), turns = raw.turns.length > 0 ? raw.turns : buildTurns(events)
@@ -10,9 +10,9 @@ export function TrajectoryPanel({ events, rawEvents, title, onBack, onExport }: 
     <section className="trajectory-content">
       <div className="trajectory-heading"><h2>{title ?? 'Current chat'}</h2>{rawEvents.length === 0 ? <p>Loading full session log…</p> : <div className="trajectory-metrics"><span><ClockIcon/>Duration {formatDuration(raw.duration)}</span><span>Turns {raw.turns.length}</span><span>Calls {raw.calls}</span></div>}</div>
       {turns.length === 0 ? <div className="trajectory-empty">No trajectory has been recorded yet.</div> : <div className="trajectory-turns">{turns.map((turn, index) => <section className="trajectory-turn" key={turn.key}>
-        <div className="trajectory-turn-head"><span>Turn {index + 1}</span><p>{turn.prompt}</p>{turn.context && <div className="trajectory-context">{turn.context.workspace && <small>Workspace: {turn.context.workspace}</small>}{turn.context.currentFile && <small>Current file: {turn.context.currentFile}</small>}</div>}</div>
+        <div className="trajectory-turn-head"><span>Turn {index + 1}</span>{turn.duration !== undefined && <small className="trajectory-duration"><ClockIcon/>{formatDuration(turn.duration)}</small>}<p>{turn.prompt}</p>{turn.context && <div className="trajectory-context">{turn.context.workspace && <small>Workspace: {turn.context.workspace}</small>}{turn.context.currentFile && <small>Current file: {turn.context.currentFile}</small>}</div>}</div>
         <div className="trajectory-steps">{turn.steps.length === 0 ? <small>Waiting for agent activity.</small> : turn.steps.map(step => <details className={`trajectory-step ${step.kind} ${step.status ?? ''}`} key={step.key}>
-          <summary><span className="trajectory-dot"/><strong>{step.title}</strong>{step.status && <small>{step.status}</small>}</summary>
+          <summary><span className="trajectory-dot"/><strong>{step.title}</strong>{step.duration !== undefined && <small className="trajectory-duration"><ClockIcon/>{formatDuration(step.duration)}</small>}{step.status && <small>{step.status}</small>}</summary>
           {step.detail && <pre>{step.detail}</pre>}
         </details>)}</div>
       </section>)}</div>}
@@ -51,6 +51,7 @@ function buildTurns(events: HarnessEvent[]): Turn[] {
 function buildRawTrajectory(events: Record<string, unknown>[]): { turns: Turn[]; calls: number; duration: number } {
   const turns: Turn[] = [], byNumber = new Map<number, Turn>()
   let current: Turn | undefined, calls = 0, firstTime: number | undefined, lastTime: number | undefined
+  const callsById = new Map<string, Step>()
   const getTurn = (number: number | undefined): Turn => {
     if (number !== undefined && byNumber.has(number)) return byNumber.get(number) as Turn
     const turn: Turn = { key: `raw-turn-${number ?? turns.length}`, prompt: number === undefined ? 'Session initialization' : `Turn ${number}`, steps: [] }
@@ -60,22 +61,39 @@ function buildRawTrajectory(events: Record<string, unknown>[]): { turns: Turn[];
     const type = typeof event.type === 'string' ? event.type : 'event', data = record(event.data), time = typeof event.time === 'number' ? event.time : undefined
     if (time !== undefined) { firstTime ??= time; lastTime = time }
     const turnNumber = typeof data.turn === 'number' ? data.turn : undefined
-    if (type === 'turn/start') { getTurn(turnNumber); continue }
+    if (type === 'turn/start') { const started = getTurn(turnNumber); started.startedAt = time; continue }
     const turn = current ?? getTurn(turnNumber)
     if (type === 'request/header') { turn.steps.push({ key: `header-${event.seq ?? Math.random()}`, kind: 'plan', title: 'System prompt', detail: 'Initial system prompt', status: 'completed' }); continue }
     if (type === 'user/message') { const message = splitPrompt(textFrom(data.content)); turn.prompt = message.prompt || 'User message'; turn.context = message.context; continue }
     if (type === 'assistant/message') { turn.steps.push({ key: `assistant-${event.seq ?? Math.random()}`, kind: 'assistant', title: 'Assistant response', detail: textFrom(record(data.message).content), status: 'completed' }); continue }
-    if (type === 'tool/call') { calls++; turn.steps.push({ key: `call-${event.seq ?? Math.random()}`, kind: 'tool', title: `Tool · ${String(data.name ?? 'call')}`, detail: textOrJson(data.arguments), status: 'running' }); continue }
-    if (type === 'tool/result') { turn.steps.push({ key: `result-${event.seq ?? Math.random()}`, kind: 'tool', title: 'Tool result', detail: textFrom(record(data.message).content) || textOrJson(data), status: data.error === undefined ? 'completed' : 'failed' }); continue }
-    if (type === 'step/start') { turn.steps.push({ key: `step-${event.seq ?? Math.random()}`, kind: 'reasoning', title: `Model step ${String(data.step ?? '')}`.trim(), status: 'running' }); continue }
+    if (type === 'tool/call') {
+      calls++
+      const step: Step = { key: `call-${event.seq ?? Math.random()}`, kind: 'tool', title: `Tool · ${String(data.name ?? 'call')}`, detail: textOrJson(data.arguments), status: 'running', startedAt: time }
+      turn.steps.push(step)
+      if (typeof data.callId === 'string') callsById.set(data.callId, step)
+      continue
+    }
+    if (type === 'tool/result') {
+      const message = record(data.message), callId = record(message.source).callId
+      const active = typeof callId === 'string' ? callsById.get(callId) : undefined
+      if (active) {
+        active.detail = [active.detail, textFrom(message.content) || textOrJson(data)].filter(Boolean).join('\n\n')
+        active.status = data.error === undefined ? 'completed' : 'failed'
+        active.duration = elapsed(active.startedAt, time)
+        if (typeof callId === 'string') callsById.delete(callId)
+      } else turn.steps.push({ key: `result-${event.seq ?? Math.random()}`, kind: 'tool', title: 'Tool result', detail: textFrom(message.content) || textOrJson(data), status: data.error === undefined ? 'completed' : 'failed' })
+      continue
+    }
+    if (type === 'step/start') { turn.steps.push({ key: `step-${event.seq ?? Math.random()}`, kind: 'reasoning', title: `Model step ${String(data.step ?? '')}`.trim(), status: 'running', startedAt: time }); continue }
     if (type === 'step/end') {
       const stepNumber = String(data.step ?? '')
       const active = [...turn.steps].reverse().find(step => step.kind === 'reasoning' && step.status === 'running' && (stepNumber === '' || step.title.endsWith(stepNumber)))
-      if (active) { active.status = 'completed'; active.detail = textOrJson(data.output ?? data.result) || undefined }
+      if (active) { active.status = 'completed'; active.detail = textOrJson(data.output ?? data.result) || undefined; active.duration = elapsed(active.startedAt, time) }
       continue
     }
     if (type === 'turn/end') {
-      for (const step of turn.steps) if (step.status === 'running') step.status = 'completed'
+      turn.duration = elapsed(turn.startedAt, time)
+      for (const step of turn.steps) if (step.status === 'running') { step.status = 'completed'; step.duration = elapsed(step.startedAt, time) }
       turn.steps.push({ key: `end-${event.seq ?? Math.random()}`, kind: 'goal', title: 'Turn completed', detail: textOrJson(data.reason), status: 'completed' }); continue
     }
     if (type === 'assistant/chunk' || type === 'session/title') continue
@@ -84,6 +102,11 @@ function buildRawTrajectory(events: Record<string, unknown>[]): { turns: Turn[];
   // Initialization records often contain only the full system prompt. They are
   // useful in the downloadable log, but add noise to the visual trajectory.
   const visibleTurns = turns.filter(turn => turn.prompt !== 'Session initialization' || turn.steps.some(step => step.kind !== 'plan'))
+  const now = Date.now()
+  for (const turn of visibleTurns) {
+    if (turn.duration === undefined && turn.startedAt !== undefined) turn.duration = elapsed(turn.startedAt, now)
+    for (const step of turn.steps) if (step.status === 'running' && step.duration === undefined) step.duration = elapsed(step.startedAt, now)
+  }
   return { turns: visibleTurns, calls, duration: firstTime === undefined || lastTime === undefined ? 0 : Math.max(0, lastTime - firstTime) }
 }
 
@@ -102,6 +125,7 @@ function splitPrompt(value: string): { prompt: string; context?: { workspace?: s
   return { prompt: prompt.length > 180 ? `${prompt.slice(0, 177)}…` : prompt, context: workspace === undefined && currentFile === undefined ? undefined : { workspace, currentFile } }
 }
 function textOrJson(value: unknown): string { if (typeof value === 'string') return value; if (Array.isArray(value)) { const text = textFrom(value); if (text !== '') return text } try { return JSON.stringify(value, null, 2) } catch { return String(value ?? '') } }
+function elapsed(startedAt: number | undefined, endedAt: number | undefined): number | undefined { return startedAt === undefined || endedAt === undefined ? undefined : Math.max(0, endedAt - startedAt) }
 function formatDuration(milliseconds: number): string { if (milliseconds < 1_000) return milliseconds === 0 ? 'Duration unavailable' : '< 1s'; const seconds = Math.round(milliseconds / 1_000); return seconds < 60 ? `${seconds}s` : `${Math.floor(seconds / 60)}m ${seconds % 60}s` }
 
 function BackIcon(): JSX.Element { return <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden><path d="m14.5 5-7 7 7 7M8 12h9"/></svg> }

@@ -57,7 +57,10 @@ export class HarnessRuntimeManager implements vscode.Disposable {
     const configured = config.get<string>('runtime.command')
     if (configured !== undefined && configured.trim() !== '') return configured
     const binary = process.platform === 'win32' ? 'dsh-py.exe' : 'dsh-py'
-    return join(this.context.extensionUri.fsPath, 'bin', binary)
+    // The bundled PyInstaller runtime is an onedir build. Unlike a one-file
+    // executable it does not unpack ~30 MB into a temporary directory at every
+    // cold start, which significantly reduces sidebar-open latency on macOS.
+    return join(this.context.extensionUri.fsPath, 'bin', 'dsh-py', binary)
   }
 
   // The runtime reuses the same DeepSeek Harness home directory as the web

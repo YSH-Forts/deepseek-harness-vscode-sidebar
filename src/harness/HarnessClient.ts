@@ -42,10 +42,10 @@ export class HarnessClient {
     await this.request('session/prompt', { sessionId, contentBlocks }, this.launch.promptTimeoutMs ?? 45_000)
   }
 
-  async history(sessionId: string): Promise<Record<string, unknown>[]> {
-    const result = await this.request('session/history', { sessionId }, 30_000)
+  async history(sessionId: string, options: { limit?: number; before?: number } = {}): Promise<{ events: Record<string, unknown>[]; hasMore: boolean; firstSeq?: number }> {
+    const result = await this.request('session/history', { sessionId, ...options }, 30_000)
     if (!isRecord(result) || !Array.isArray(result.events)) throw new Error('Runtime returned invalid session history')
-    return result.events.filter(isRecord)
+    return { events: result.events.filter(isRecord), hasMore: result.hasMore === true, ...(typeof result.firstSeq === 'number' ? { firstSeq: result.firstSeq } : {}) }
   }
 
   async listSessions(): Promise<Record<string, unknown>[]> {
