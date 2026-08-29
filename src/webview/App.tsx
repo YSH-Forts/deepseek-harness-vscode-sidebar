@@ -15,7 +15,7 @@ const MODE_OPTIONS = [
   { value: 'creator', label: 'Creator', description: 'Cordis plugin authoring setup' },
 ]
 const EMPTY: WebviewState = {
-  runtime: { state: 'stopped' }, sessions: [], commands: [], events: [], historyHasMore: false, trajectoryEvents: [], plugins: [], attachedFiles: [],
+  runtime: { state: 'stopped' }, sessions: [], commands: [], events: [], historyLoading: true, trajectoryEvents: [], plugins: [], attachedFiles: [],
   settings: { provider: 'deepseek-official', model: 'deepseek-v4-flash', endpoint: '', permissionMode: 'workspace-write', credential: { configured: false, writable: true }, loading: true }, gitChanges: [],
 }
 
@@ -113,9 +113,9 @@ export function App(): JSX.Element {
     {state.runtime.state === 'error' && <div className="banner error-banner"><span>{state.runtime.message ?? 'Runtime unavailable'}</span><button onClick={() => vscode.postMessage({ type: 'restartRuntime' })}>Restart</button></div>}
     {!state.settings.loading && !state.settings.credential.configured && <button className="banner credential-banner" onClick={() => setSettingsOpen(true)}><span>Configure DeepSeek API Key</span><b>Open settings →</b></button>}
 
-    <Conversation events={state.events} hasEarlierEvents={state.historyHasMore} running={running} changedFiles={changedFiles} gitChanges={state.gitChanges} post={message => vscode.postMessage(message)} onEdit={value => { setText(value); composer.current?.focus() }}/>
+    <Conversation events={state.events} loading={state.historyLoading} running={running} changedFiles={changedFiles} gitChanges={state.gitChanges} post={message => vscode.postMessage(message)} onEdit={value => { setText(value); composer.current?.focus() }}/>
 
-    <div className="composer-wrap">
+    {!state.historyLoading && <div className="composer-wrap">
       {state.attachedFiles.length > 0 && <div className="attachment-rail">{state.attachedFiles.map(path => <button key={path} title={path} onClick={() => vscode.postMessage({ type: 'removeAttachment', path })}>📎 {basename(path)} <span>×</span></button>)}</div>}
       {queuedMessage !== undefined && <div className="queued-message"><span className="queue-mark"><QueueIcon/></span><p title={queuedMessage}>{queuedMessage}</p><button className="queue-steer" data-tooltip="Send as steering instruction" onClick={() => { vscode.postMessage({ type: 'steerMessage', text: queuedMessage }); setQueuedMessage(undefined) }}><SteerIcon/>Steer</button><button className="queue-action" data-tooltip="Remove queued message" aria-label="Remove queued message" onClick={() => setQueuedMessage(undefined)}><TrashIcon/></button><div className="queue-overflow" ref={queueMenu}><button className="queue-action" data-tooltip="More queue options" aria-label="More queue options" aria-expanded={queueMenuOpen} onClick={() => setQueueMenuOpen(open => !open)}><MoreIcon/></button>{queueMenuOpen && <div className="queue-menu" role="menu"><button role="menuitem" onClick={() => { setText(queuedMessage); setQueuedMessage(undefined); setQueueMenuOpen(false); composer.current?.focus() }}><EditIcon/>Edit message</button><button role="menuitem" onClick={() => { setQueueingEnabled(false); setQueueMenuOpen(false) }}><QueueIcon/>Turn off queueing</button></div>}</div></div>}
       <div className="composer">
@@ -146,7 +146,7 @@ export function App(): JSX.Element {
           <button className={`send-button ${running ? 'stop-send-button' : ''}`} aria-label={running ? 'Stop current response' : 'Send message'} title={running ? 'Stop current response' : canSend ? 'Send message' : 'Configure a DeepSeek API key in Settings first'} disabled={!running && (text.trim() === '' || !canSend)} onClick={() => { if (running) vscode.postMessage({ type: 'cancel' }); else submit() }}>{running ? <StopIcon/> : <SendIcon/>}</button>
         </div>
       </div>
-    </div>
+    </div>}
   </main>
 }
 

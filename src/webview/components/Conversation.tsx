@@ -15,7 +15,7 @@ type Row =
 
 type ToolStep = { key: string; callId: string; name: string; arguments: string; result?: string; failed?: boolean; completed: boolean; changed?: boolean; reviewed?: 'kept' | 'reverted' }
 
-export function Conversation({ events, hasEarlierEvents, running, changedFiles, gitChanges, post, onEdit }: { events: HarnessEvent[]; hasEarlierEvents: boolean; running: boolean; changedFiles: Extract<HarnessEvent, { type: 'file.changed' }>[]; gitChanges: { path: string; status: string }[]; post(message: WebviewToExtensionMessage): void; onEdit(value: string): void }): JSX.Element {
+export function Conversation({ events, loading, running, changedFiles, gitChanges, post, onEdit }: { events: HarnessEvent[]; loading: boolean; running: boolean; changedFiles: Extract<HarnessEvent, { type: 'file.changed' }>[]; gitChanges: { path: string; status: string }[]; post(message: WebviewToExtensionMessage): void; onEdit(value: string): void }): JSX.Element {
   const scroll = useRef<HTMLElement>(null), wasNearBottom = useRef(true)
   const rows = useMemo(() => buildRows(events), [events])
   const changedPaths = new Set(changedFiles.map(change => change.path))
@@ -28,10 +28,9 @@ export function Conversation({ events, hasEarlierEvents, running, changedFiles, 
     const element = event.currentTarget
     wasNearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 96
   }}>
-    {rows.length === 0 && <div className="empty-state"><div className="empty-logo">◒</div><h2>What can I help you build?</h2><p>Ask about your code, attach context, or start with a task.</p></div>}
+    {loading ? <div className="conversation-loading" role="status" aria-live="polite"><i/><span>Loading conversation…</span></div> : rows.length === 0 && <div className="empty-state"><div className="empty-logo">◒</div><h2>What can I help you build?</h2><p>Ask about your code, attach context, or start with a task.</p></div>}
     <div className="conversation-column">
-      {hasEarlierEvents && <button className="load-earlier" onClick={() => post({ type: 'loadEarlierHistory' })}>Load earlier messages</button>}
-      {rows.map(row => <RowView key={row.key} row={row} post={post} onEdit={onEdit}/>)}
+      {!loading && <>{rows.map(row => <RowView key={row.key} row={row} post={post} onEdit={onEdit}/>)}
       {running && <div className="deep-diving"><i/><span>Deep diving…</span></div>}
       {changeCount > 0 && <details className="change-summary">
         <summary>{changeCount} file{changeCount === 1 ? '' : 's'} changed</summary>
@@ -40,7 +39,7 @@ export function Conversation({ events, hasEarlierEvents, running, changedFiles, 
           {remainingGitChanges.map(change => <button key={change.path} onClick={() => post({ type: 'openGitFileDiff', path: change.path })} title={change.path}><b>{change.status}</b> {basename(change.path)}</button>)}
           {gitChanges.length > 0 && <button className="git-diff-link" onClick={() => post({ type: 'openGitDiff' })}>View Git diff</button>}
         </div>
-      </details>}
+      </details>}</>}
     </div>
   </section>
 }

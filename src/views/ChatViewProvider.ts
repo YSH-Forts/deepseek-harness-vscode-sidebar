@@ -13,9 +13,6 @@ import type { HarnessCommand, HarnessEvent, PluginInfo, SessionSummary, Settings
 const SESSION_KEY = 'deepseekHarness.sessions.v2'
 const FILE_CHANGE_KEY = 'deepseekHarness.fileChanges.v1'
 const MAX_PRESENTATION_EVENTS = 5_000
-// Keep first paint light. Older events remain available through “Load earlier
-// messages”, so a large, long-lived session does not hold up opening the view.
-const INITIAL_HISTORY_EVENTS = 120
 const execFileAsync = promisify(execFile)
 interface PersistedFileChange { callId: string; sessionId: string; path: string; beforeFile?: string; afterFile?: string; decision?: 'kept' | 'reverted' }
 
@@ -28,8 +25,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
   private plugins: PluginInfo[] = []
   private activeSessionId: string | undefined
   private events: HarnessEvent[] = []
-  private historyHasMore = false
-  private historyBefore: number | undefined
+  private historyLoading = false
   private subscription: vscode.Disposable | undefined
   private activationGeneration = 0
   private settings: SettingsState
@@ -117,7 +113,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
         case 'deleteSession': await this.deleteSession(); return
         case 'restartRuntime': await this.restartRuntime(); return
         case 'loadTrajectory': await this.loadTrajectory(); return
-        case 'loadEarlierHistory': await this.loadEarlierHistory(); return
         case 'loadPlugins': await this.loadPlugins(); return
         case 'attachFiles': await this.contextBridge.chooseAttachments(); await this.postState(); return
         case 'removeAttachment': this.contextBridge.removeAttachment(message.path); await this.postState(); return
@@ -173,16 +168,6 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
   private async loadTrajectory(): Promise<void> {
     if (this.activeSessionId === undefined) return
     this.trajectoryEvents = await (await this.runtime.start()).rawHistory(this.activeSessionId)
-    await this.postState()
-  }
-
-  private async loadEarlierHistory(): Promise<void> {
-    const id = this.activeSessionId
-    if (id === undefined || !this.historyHasMore || this.historyBefore === undefined) return
-    const page = await (await this.runtime.start()).history(id, { limit: INITIAL_HISTORY_EVENTS, before: this.historyBefore })
-    this.events = [...page.events, ...this.events]
-    this.historyHasMore = page.hasMore
-    this.historyBefore = page.firstSeq
     await this.postState()
   }
 
@@ -259,11 +244,11 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     const generation = ++this.activationGeneration
     if (this.view === undefined) return
     this.trajectoryEvents = []
-    this.historyHasMore = false
-    this.historyBefore = undefined
-    // Render the shell as soon as the WebView is ready, then run credential and
-    // session hydration concurrently. Credential metadata must not make the
-    // initial chat surface wait behind a cold runtime or a large session list.
+    this.historyLoading = true
+    this.events = []
+    // The conversation itself waits for a complete, coherent history page.
+    // Showing a loader and withholding the composer prevents a user action
+    // against a session that is still being restored.
     await this.postState()
     const adapter = await this.runtime.start()
     const settingsTask = this.refreshSettings(adapter)
@@ -272,7 +257,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     // index, rather than making those two RPCs serial.
     const preferredId = this.activeSessionId
     const preferredDataTask = preferredId === undefined ? undefined : Promise.all([
-      adapter.history(preferredId, { limit: INITIAL_HISTORY_EVENTS }),
+      adapter.history(preferredId),
       adapter.pendingApprovals(preferredId),
       adapter.sessionStatus(preferredId),
     ])
@@ -284,19 +269,19 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     const id = this.activeSessionId
     if (id === undefined) {
       this.events = []
+      this.historyLoading = false
       await settingsTask; await this.persist(); await this.postState(); return
     }
     const [historyPage, pending, status] = id === preferredId && preferredDataTask !== undefined
       ? await preferredDataTask
-      : await Promise.all([adapter.history(id, { limit: INITIAL_HISTORY_EVENTS }), adapter.pendingApprovals(id), adapter.sessionStatus(id)])
+      : await Promise.all([adapter.history(id), adapter.pendingApprovals(id), adapter.sessionStatus(id)])
     if (generation !== this.activationGeneration) return
     const history = historyPage.events
-    this.historyHasMore = historyPage.hasMore
-    this.historyBefore = historyPage.firstSeq
     const resolved = new Set(history.flatMap(event => event.type === 'approval.resolved' ? [event.approvalId] : []))
     const known = new Set(history.flatMap(event => event.type === 'approval.requested' ? [event.approvalId] : []))
     this.events = [...history, ...pending.filter(event => event.type === 'approval.requested' && !known.has(event.approvalId) && !resolved.has(event.approvalId)), { type: 'status.changed', sessionId: id, status }]
     this.subscribe(adapter, id)
+    this.historyLoading = false
     await settingsTask; await this.persist(); await this.postState()
     void this.hydrateChangesAfterFirstPaint(id, generation)
     void this.refreshGitChanges()
@@ -421,7 +406,7 @@ export class ChatViewProvider implements vscode.WebviewViewProvider, vscode.Disp
     const state: WebviewState = {
       runtime: this.runtime.getStatus(), sessions: this.sessions, commands: this.commands, plugins: this.plugins,
       ...(this.activeSessionId === undefined ? {} : { activeSessionId: this.activeSessionId }),
-      events: this.events, historyHasMore: this.historyHasMore, trajectoryEvents: this.trajectoryEvents, attachedFiles: this.contextBridge.attachedFiles, settings: this.settings, gitChanges: this.gitChanges,
+      events: this.events, historyLoading: this.historyLoading, trajectoryEvents: this.trajectoryEvents, attachedFiles: this.contextBridge.attachedFiles, settings: this.settings, gitChanges: this.gitChanges,
     }
     return this.view?.webview.postMessage({ type: 'state', state })
   }

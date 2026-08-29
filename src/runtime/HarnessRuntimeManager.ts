@@ -84,6 +84,11 @@ export class HarnessRuntimeManager implements vscode.Disposable {
   // sessionCompression (or DSH_SESSION_COMPRESSION) still wins.
   private resolveEnv(config: vscode.WorkspaceConfiguration, dataDir: string): NodeJS.ProcessEnv {
     const compression = config.get<string>('sessionCompression', 'zstd')
+    const usingBundledRuntime = (config.get<string>('runtime.command') ?? '').trim() === ''
+    // PyInstaller does not have the macOS framework Python's default CA path.
+    // Use the certifi bundle shipped with our onedir runtime so httpx/ssl never
+    // inherits a stale SSL_CERT_FILE from VS Code or the user's shell.
+    const bundledCaFile = join(this.context.extensionUri.fsPath, 'bin', 'dsh-py', 'runtime', 'certifi', 'cacert.pem')
     return {
       ...process.env,
       DSH_CWD: this.workspaceRoot,
@@ -91,6 +96,7 @@ export class HarnessRuntimeManager implements vscode.Disposable {
       DSH_SESSION_COMPRESSION: compression !== undefined && compression.trim() !== '' ? compression : 'zstd',
       ...(config.get<string>('endpoint', '').trim() === '' ? {} : { DEEPSEEK_BASE_URL: config.get<string>('endpoint', '').trim() }),
       DSH_PERMISSION_MODE: config.get<string>('permissionMode', 'workspace-write'),
+      ...(usingBundledRuntime ? { SSL_CERT_FILE: bundledCaFile, REQUESTS_CA_BUNDLE: bundledCaFile } : {}),
     }
   }
 }
