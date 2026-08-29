@@ -28,7 +28,7 @@ export function Conversation({ events, loading, running, changedFiles, gitChange
     const element = event.currentTarget
     wasNearBottom.current = element.scrollHeight - element.scrollTop - element.clientHeight < 96
   }}>
-    {loading ? <div className="conversation-loading" role="status" aria-live="polite"><i/><span>Loading conversation…</span></div> : rows.length === 0 && <div className="empty-state"><div className="empty-logo">◒</div><h2>What can I help you build?</h2><p>Ask about your code, attach context, or start with a task.</p></div>}
+    {loading ? <div className="conversation-loading" role="status" aria-live="polite"><img src={deepseekLogo} alt=""/><div><i/><span>Loading conversation…</span></div></div> : rows.length === 0 && <div className="empty-state"><div className="empty-logo">◒</div><h2>What can I help you build?</h2><p>Ask about your code, attach context, or start with a task.</p></div>}
     <div className="conversation-column">
       {!loading && <>{rows.map(row => <RowView key={row.key} row={row} post={post} onEdit={onEdit}/>)}
       {running && <div className="deep-diving"><i/><span>Deep diving…</span></div>}

@@ -57,7 +57,7 @@ button { cursor: pointer; }
 
 .conversation { flex: 1 1 auto; overflow: auto; min-height: 0; min-width: 0; }
 .conversation-column { width: min(100%, 720px); margin: 0 auto; padding: 8px 14px 20px; }
-.conversation-loading { display: flex; min-height: 100%; align-items: center; justify-content: center; gap: 9px; color: var(--dsw-muted); font-size: 12px; }.conversation-loading i { width: 14px; height: 14px; border: 2px solid color-mix(in srgb, var(--dsw-muted) 30%, transparent); border-top-color: var(--dsw-brand); border-radius: 50%; animation: spin .8s linear infinite; }
+.conversation-loading { display: grid; min-height: 100%; align-content: center; justify-items: center; gap: 10px; color: var(--dsw-muted); font-size: 12px; }.conversation-loading > img { width: 31px; height: 31px; object-fit: contain; }.conversation-loading > div { display: inline-flex; align-items: center; gap: 7px; }.conversation-loading i { width: 12px; height: 12px; border: 2px solid color-mix(in srgb, var(--dsw-muted) 30%, transparent); border-top-color: var(--dsw-brand); border-radius: 50%; animation: spin .8s linear infinite; }
 .empty-state { margin: min(24vh, 130px) auto 0; max-width: 260px; text-align: center; color: var(--dsw-muted); }
 .empty-logo { width: 42px; height: 42px; margin: 0 auto 13px; display: grid; place-items: center; border-radius: 14px; background: var(--dsw-brand-soft); color: var(--dsw-brand); font-size: 24px; }
 .empty-state h2 { margin: 0 0 7px; color: var(--dsw-text); font-size: 17px; font-weight: 650; }
