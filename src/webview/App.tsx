@@ -67,8 +67,10 @@ export function App(): JSX.Element {
     && [...state.events].reverse().find(event => event.type === 'status.changed')?.status === 'running'
   const canSend = state.runtime.state !== 'error' && (state.settings.loading || state.settings.credential.configured)
   const changedFiles = Array.from(new Map(state.events.filter((event): event is Extract<typeof event, { type: 'file.changed' }> => event.type === 'file.changed').map(event => [event.path, event])).values())
-  const latestUsage = [...state.events].reverse().find((event): event is Extract<typeof event, { type: 'context.usage' }> => event.type === 'context.usage')
-  const contextTokens = latestUsage?.inputTokens ?? 0, contextLimit = 1_000_000, contextPercent = Math.min(100, contextTokens / contextLimit * 100)
+  const latestUsage = [...state.events].reverse().find((event): event is Extract<typeof event, { type: 'context.usage' }> => event.type === 'context.usage' && event.inputTokens > 0)
+  const estimatedContextTokens = estimateContextTokens(state.events)
+  const contextTokens = latestUsage?.inputTokens ?? estimatedContextTokens, contextLimit = 1_000_000, contextPercent = Math.min(100, contextTokens / contextLimit * 100)
+  const contextLabel = `${contextPercent.toFixed(1)}% · ${formatTokenCount(contextTokens)} / 1.0M context used${latestUsage === undefined ? ' (estimated)' : ''}`
   const selectedMode = MODE_OPTIONS.find(mode => mode.value === agentMode) ?? { value: 'standard', label: 'Standard', description: 'Full agent toolset' }
   useEffect(() => {
     if (running) { queueDispatching.current = false; return }
@@ -125,6 +127,7 @@ export function App(): JSX.Element {
         }}/>
         {!state.settings.loading && !state.settings.credential.configured && <button className="composer-key-warning" onClick={() => setSettingsOpen(true)}>Configure an API key in Settings to send messages.</button>}
         <div className="composer-actions">
+          <div className="composer-control-group composer-control-group-left">
           <div className="add-menu-wrap" ref={addMenu}>
             <button className="add-button" data-tooltip="Add context or mode" aria-label="Add" aria-expanded={addMenuOpen} onClick={() => { setAddMenuOpen(open => !open); setGoalEditorOpen(false) }}><AddIcon/></button>
             {addMenuOpen && <div className="add-menu" role="menu">
@@ -136,15 +139,17 @@ export function App(): JSX.Element {
             </div>}
           </div>
           <select className="composer-mode-select" value={agentMode} aria-label="Select agent mode" data-tooltip={`${selectedMode.label} · ${selectedMode.description}`} onChange={event => setAgentMode(event.target.value)}>{MODE_OPTIONS.map(mode => <option key={mode.value} value={mode.value}>{mode.label}</option>)}</select>
-          <span/>
+          </div>
+          <div className="composer-control-group composer-control-group-right">
           <select className="composer-model-select" value={composerModel} aria-label="Select model" data-tooltip="Select model" onChange={event => { const model = event.target.value; setComposerModel(model); vscode.postMessage({ type: 'saveSettings', provider: state.settings.provider, model, endpoint: state.settings.endpoint, permissionMode: state.settings.permissionMode }) }}>
             <option value="deepseek-v4-flash">DeepSeek V4 Flash</option>
             <option value="deepseek-v4-pro">DeepSeek V4 Pro</option>
             <option value="deepseek-v4-flash-vision-exp">DeepSeek V4 Flash Vision Exp</option>
             {!['deepseek-v4-flash', 'deepseek-v4-pro', 'deepseek-v4-flash-vision-exp'].includes(composerModel) && <option value={composerModel}>{composerModel}</option>}
           </select>
-          <button className="context-meter" data-tooltip={`${contextPercent.toFixed(1)}% · ${formatTokenCount(contextTokens)} / 1.0M context used`} aria-label="Context usage" type="button"><ContextRing percent={contextPercent}/></button>
+          <button className="context-meter" data-tooltip={contextLabel} aria-label={contextLabel} type="button"><ContextRing percent={contextPercent}/></button>
           <button className={`send-button ${running ? 'stop-send-button' : ''}`} aria-label={running ? 'Stop current response' : 'Send message'} title={running ? 'Stop current response' : canSend ? 'Send message' : 'Configure a DeepSeek API key in Settings first'} disabled={!running && (text.trim() === '' || !canSend)} onClick={() => { if (running) vscode.postMessage({ type: 'cancel' }); else submit() }}>{running ? <StopIcon/> : <SendIcon/>}</button>
+          </div>
         </div>
       </div>
     </div>}
@@ -153,6 +158,13 @@ export function App(): JSX.Element {
 
 function basename(path: string): string { return path.split(/[\\/]/).at(-1) ?? path }
 function formatTokenCount(value: number): string { return value >= 1000 ? `${(value / 1000).toFixed(value >= 100_000 ? 0 : 1)}K` : String(value) }
+function estimateContextTokens(events: WebviewState['events']): number {
+  const userChars = events.filter((event): event is Extract<WebviewState['events'][number], { type: 'user.message' }> => event.type === 'user.message').reduce((total, event) => total + event.text.length, 0)
+  const completed = events.filter((event): event is Extract<WebviewState['events'][number], { type: 'assistant.completed' }> => event.type === 'assistant.completed').reduce((total, event) => total + event.text.length, 0)
+  const chunkChars = completed === 0 ? events.filter((event): event is Extract<WebviewState['events'][number], { type: 'assistant.chunk' }> => event.type === 'assistant.chunk').reduce((total, event) => total + event.text.length, 0) : 0
+  const chars = userChars + completed + chunkChars
+  return chars === 0 ? 0 : Math.max(1, Math.ceil(chars / 3.2))
+}
 
 function ToolbarIcon({ kind }: { kind: 'new' | 'history' | 'trajectory' | 'plugins' | 'settings' }): JSX.Element {
   if (kind === 'new') return <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden><path d="M12 5v14M5 12h14"/></svg>
