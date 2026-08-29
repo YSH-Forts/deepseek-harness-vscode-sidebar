@@ -106,6 +106,7 @@ function formatContent(message: string, context: AgentContext): Record<string, u
 }
 
 function modeInstruction(mode: string): string {
+  if (mode === 'plan') return 'Plan mode. First explain a concise, actionable plan; do not make changes or call tools until the user explicitly asks you to execute it.'
   if (mode === 'code') return 'Code mode. Prioritize code generation and use code to orchestrate task steps.'
   if (mode === 'minimal') return 'Minimal mode. Prefer a small, direct workflow using only essential shell and file operations.'
   if (mode === 'creator') return 'Creator mode. Focus on inspecting the current runtime and designing, testing, or composing Cordis plugins.'

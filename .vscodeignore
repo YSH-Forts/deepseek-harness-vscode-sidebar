@@ -3,6 +3,7 @@
 src/**
 docs/**
 node_modules/**
+.workbuddy/**
 dist/webview/index.html
 tsconfig.json
 vite.config.ts

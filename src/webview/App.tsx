@@ -10,6 +10,7 @@ declare function acquireVsCodeApi(): { postMessage(message: WebviewToExtensionMe
 const vscode = acquireVsCodeApi()
 const MODE_OPTIONS = [
   { value: 'standard', label: 'Standard', description: 'Full agent toolset' },
+  { value: 'plan', label: 'Plan', description: 'Plan the work before taking action' },
   { value: 'code', label: 'Code', description: 'Code-focused agent runtime' },
   { value: 'minimal', label: 'Minimal', description: 'Minimal shell and editor setup' },
   { value: 'creator', label: 'Creator', description: 'Cordis plugin authoring setup' },
@@ -129,7 +130,7 @@ export function App(): JSX.Element {
             {addMenuOpen && <div className="add-menu" role="menu">
               {!goalEditorOpen ? <>
                 <button role="menuitem" onClick={() => { vscode.postMessage({ type: 'attachFiles' }); setAddMenuOpen(false) }}><PaperclipIcon/><span><strong>Files and folders</strong><small>Add files as context</small></span></button>
-                <button role="menuitem" onClick={() => { vscode.postMessage({ type: 'sendMessage', text: '/plan' }); setAddMenuOpen(false) }}><PlanIcon/><span><strong>Plan mode</strong><small>Turn plan mode on</small></span></button>
+                <button role="menuitem" onClick={() => { setAgentMode('plan'); setAddMenuOpen(false) }}><PlanIcon/><span><strong>Plan mode</strong><small>Plan before acting</small></span></button>
                 <button role="menuitem" onClick={() => setGoalEditorOpen(true)}><GoalIcon/><span><strong>Goal</strong><small>Set a goal to keep pursuing</small></span></button>
               </> : <form className="goal-editor" onSubmit={event => { event.preventDefault(); const objective = goalText.trim(); if (objective === '') return; vscode.postMessage({ type: 'sendMessage', text: `/goal ${objective}` }); setGoalText(''); setGoalEditorOpen(false); setAddMenuOpen(false) }}><strong>Set goal</strong><input value={goalText} onChange={event => setGoalText(event.target.value)} placeholder="What should DeepSeek keep pursuing?" autoFocus/><div><button type="button" onClick={() => setGoalEditorOpen(false)}>Back</button><button type="submit">Set goal</button></div></form>}
             </div>}
