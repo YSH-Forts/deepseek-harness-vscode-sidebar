@@ -24,7 +24,7 @@ export function App(): JSX.Element {
   const [state, setState] = useState(EMPTY)
   const [text, setText] = useState('')
   const [settingsOpen, setSettingsOpen] = useState(false), [historyOpen, setHistoryOpen] = useState(false), [trajectoryOpen, setTrajectoryOpen] = useState(false), [pluginMarketOpen, setPluginMarketOpen] = useState(false)
-  const [addMenuOpen, setAddMenuOpen] = useState(false), [goalEditorOpen, setGoalEditorOpen] = useState(false), [goalText, setGoalText] = useState('')
+  const [addMenuOpen, setAddMenuOpen] = useState(false), [modeMenuOpen, setModeMenuOpen] = useState(false), [goalEditorOpen, setGoalEditorOpen] = useState(false), [goalText, setGoalText] = useState('')
   const [queuedMessage, setQueuedMessage] = useState<string | undefined>()
   const [queueMenuOpen, setQueueMenuOpen] = useState(false), [queueingEnabled, setQueueingEnabled] = useState(true)
   const [composerModel, setComposerModel] = useState(EMPTY.settings.model)
@@ -48,7 +48,7 @@ export function App(): JSX.Element {
   useEffect(() => {
     if (!addMenuOpen) return
     const closeOnOutsidePointer = (event: PointerEvent): void => {
-      if (!addMenu.current?.contains(event.target as Node)) { setAddMenuOpen(false); setGoalEditorOpen(false) }
+      if (!addMenu.current?.contains(event.target as Node)) { setAddMenuOpen(false); setModeMenuOpen(false); setGoalEditorOpen(false) }
     }
     document.addEventListener('pointerdown', closeOnOutsidePointer)
     return () => document.removeEventListener('pointerdown', closeOnOutsidePointer)
@@ -129,16 +129,15 @@ export function App(): JSX.Element {
         <div className="composer-actions">
           <div className="composer-control-group composer-control-group-left">
           <div className="add-menu-wrap" ref={addMenu}>
-            <button className="add-button" data-tooltip="Add context or mode" aria-label="Add" aria-expanded={addMenuOpen} onClick={() => { setAddMenuOpen(open => !open); setGoalEditorOpen(false) }}><AddIcon/></button>
+            <button className="add-button" data-tooltip="Add context or select mode" aria-label="Add" aria-expanded={addMenuOpen} onClick={() => { setAddMenuOpen(open => !open); setModeMenuOpen(false); setGoalEditorOpen(false) }}><AddIcon/></button>
             {addMenuOpen && <div className="add-menu" role="menu">
-              {!goalEditorOpen ? <>
+              {!goalEditorOpen && !modeMenuOpen ? <>
                 <button role="menuitem" onClick={() => { vscode.postMessage({ type: 'attachFiles' }); setAddMenuOpen(false) }}><PaperclipIcon/><span><strong>Files and folders</strong><small>Add files as context</small></span></button>
-                <button role="menuitem" onClick={() => { setAgentMode('plan'); setAddMenuOpen(false) }}><PlanIcon/><span><strong>Plan mode</strong><small>Plan before acting</small></span></button>
+                <button role="menuitem" onClick={() => setModeMenuOpen(true)}><ModeIcon/><span><strong>{selectedMode.label} mode</strong><small>Select how DeepSeek should work</small></span></button>
                 <button role="menuitem" onClick={() => setGoalEditorOpen(true)}><GoalIcon/><span><strong>Goal</strong><small>Set a goal to keep pursuing</small></span></button>
-              </> : <form className="goal-editor" onSubmit={event => { event.preventDefault(); const objective = goalText.trim(); if (objective === '') return; vscode.postMessage({ type: 'sendMessage', text: `/goal ${objective}` }); setGoalText(''); setGoalEditorOpen(false); setAddMenuOpen(false) }}><strong>Set goal</strong><input value={goalText} onChange={event => setGoalText(event.target.value)} placeholder="What should DeepSeek keep pursuing?" autoFocus/><div><button type="button" onClick={() => setGoalEditorOpen(false)}>Back</button><button type="submit">Set goal</button></div></form>}
+              </> : modeMenuOpen ? <div className="mode-picker" role="group" aria-label="Select mode"><button type="button" className="mode-picker-back" onClick={() => setModeMenuOpen(false)}>‹ Back</button><small>Mode</small>{MODE_OPTIONS.map(mode => <button key={mode.value} type="button" className={agentMode === mode.value ? 'selected' : ''} onClick={() => { setAgentMode(mode.value); setModeMenuOpen(false); setAddMenuOpen(false) }}><span><strong>{mode.label}</strong><small>{mode.description}</small></span>{agentMode === mode.value && <b>✓</b>}</button>)}</div> : <form className="goal-editor" onSubmit={event => { event.preventDefault(); const objective = goalText.trim(); if (objective === '') return; vscode.postMessage({ type: 'sendMessage', text: `/goal ${objective}` }); setGoalText(''); setGoalEditorOpen(false); setAddMenuOpen(false) }}><strong>Set goal</strong><input value={goalText} onChange={event => setGoalText(event.target.value)} placeholder="What should DeepSeek keep pursuing?" autoFocus/><div><button type="button" onClick={() => setGoalEditorOpen(false)}>Back</button><button type="submit">Set goal</button></div></form>}
             </div>}
           </div>
-          <select className="composer-mode-select" value={agentMode} aria-label="Select agent mode" data-tooltip={`${selectedMode.label} · ${selectedMode.description}`} onChange={event => setAgentMode(event.target.value)}>{MODE_OPTIONS.map(mode => <option key={mode.value} value={mode.value}>{mode.label}</option>)}</select>
           </div>
           <div className="composer-control-group composer-control-group-right">
           <select className="composer-model-select" value={composerModel} aria-label="Select model" data-tooltip="Select model" onChange={event => { const model = event.target.value; setComposerModel(model); vscode.postMessage({ type: 'saveSettings', provider: state.settings.provider, model, endpoint: state.settings.endpoint, permissionMode: state.settings.permissionMode }) }}>
@@ -181,6 +180,7 @@ function ContextRing({ percent }: { percent: number }): JSX.Element {
 function AddIcon(): JSX.Element { return <svg className="toolbar-icon" viewBox="0 0 24 24" aria-hidden><path d="M12 5v14M5 12h14"/></svg> }
 function PaperclipIcon(): JSX.Element { return <svg viewBox="0 0 24 24" aria-hidden><path d="m8 12 6.4-6.4a3 3 0 1 1 4.2 4.2l-8.5 8.5a5 5 0 1 1-7.1-7.1l8-8"/></svg> }
 function PlanIcon(): JSX.Element { return <svg viewBox="0 0 24 24" aria-hidden><path d="M9 18h6M10 22h4M8.5 14.5A6.5 6.5 0 1 1 15.5 14.5c-1.1.8-1.5 1.4-1.5 2.5h-4c0-1.1-.4-1.7-1.5-2.5Z"/></svg> }
+function ModeIcon(): JSX.Element { return <svg viewBox="0 0 24 24" aria-hidden><path d="M5 7h14M5 12h14M5 17h14"/><circle cx="9" cy="7" r="1.5"/><circle cx="15" cy="12" r="1.5"/><circle cx="11" cy="17" r="1.5"/></svg> }
 function GoalIcon(): JSX.Element { return <svg viewBox="0 0 24 24" aria-hidden><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3"/><path d="m15 9 5-5"/></svg> }
 function SendIcon(): JSX.Element { return <svg viewBox="0 0 24 24" aria-hidden><path d="M12 19V5m0 0L6.5 10.5M12 5l5.5 5.5"/></svg> }
 function StopIcon(): JSX.Element { return <svg viewBox="0 0 24 24" aria-hidden><rect x="7" y="7" width="10" height="10" rx="1"/></svg> }
