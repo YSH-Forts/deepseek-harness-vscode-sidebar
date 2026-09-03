@@ -50,17 +50,14 @@ export class HarnessRuntimeManager implements vscode.Disposable {
     }
   }
 
-  // The bundled runtime binary ships alongside the extension and is the
+  // The bundled native dsh executable ships alongside the extension and is the
   // zero-configuration default. A user-configured command still wins so power
-  // users can point at their own dsh-py (e.g. a source checkout).
+  // users can point at their own Harness checkout.
   private resolveCommand(config: vscode.WorkspaceConfiguration): string {
     const configured = config.get<string>('runtime.command')
     if (configured !== undefined && configured.trim() !== '') return configured
-    const binary = process.platform === 'win32' ? 'dsh-py.exe' : 'dsh-py'
-    // The bundled PyInstaller runtime is an onedir build. Unlike a one-file
-    // executable it does not unpack ~30 MB into a temporary directory at every
-    // cold start, which significantly reduces sidebar-open latency on macOS.
-    return join(this.context.extensionUri.fsPath, 'bin', 'dsh-py', binary)
+    const binary = process.platform === 'win32' ? 'dsh.exe' : 'dsh'
+    return join(this.context.extensionUri.fsPath, 'bin', 'dsh', binary)
   }
 
   // The runtime reuses the same DeepSeek Harness home directory as the web
@@ -75,7 +72,7 @@ export class HarnessRuntimeManager implements vscode.Disposable {
   }
 
   private resolveArgs(config: vscode.WorkspaceConfiguration): string[] {
-    return config.get<string[]>('runtime.arguments', ['sdk'])
+    return config.get<string[]>('runtime.arguments', ['--profile', 'sdk'])
   }
 
   // Build the child env. We reuse the web harness's home directory (dataDir)
@@ -84,19 +81,16 @@ export class HarnessRuntimeManager implements vscode.Disposable {
   // sessionCompression (or DSH_SESSION_COMPRESSION) still wins.
   private resolveEnv(config: vscode.WorkspaceConfiguration, dataDir: string): NodeJS.ProcessEnv {
     const compression = config.get<string>('sessionCompression', 'zstd')
-    const usingBundledRuntime = (config.get<string>('runtime.command') ?? '').trim() === ''
-    // PyInstaller does not have the macOS framework Python's default CA path.
-    // Use the certifi bundle shipped with our onedir runtime so httpx/ssl never
-    // inherits a stale SSL_CERT_FILE from VS Code or the user's shell.
-    const bundledCaFile = join(this.context.extensionUri.fsPath, 'bin', 'dsh-py', 'runtime', 'certifi', 'cacert.pem')
     return {
       ...process.env,
       DSH_CWD: this.workspaceRoot,
       DSH_DATA_DIR: dataDir,
+      // Current native dsh uses DSH_HOME. Keep DSH_DATA_DIR as well for
+      // compatibility with an explicitly configured legacy runtime.
+      DSH_HOME: dataDir,
       DSH_SESSION_COMPRESSION: compression !== undefined && compression.trim() !== '' ? compression : 'zstd',
       ...(config.get<string>('endpoint', '').trim() === '' ? {} : { DEEPSEEK_BASE_URL: config.get<string>('endpoint', '').trim() }),
       DSH_PERMISSION_MODE: config.get<string>('permissionMode', 'workspace-write'),
-      ...(usingBundledRuntime ? { SSL_CERT_FILE: bundledCaFile, REQUESTS_CA_BUNDLE: bundledCaFile } : {}),
     }
   }
 }

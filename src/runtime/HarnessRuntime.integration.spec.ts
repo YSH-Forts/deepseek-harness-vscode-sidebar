@@ -63,8 +63,8 @@ describe('HarnessRuntime integration (frozen dsh-py)', () => {
     const client = makeClient()
     try {
       await client.initialize({ cwd, provider: 'deepseek-official', model: 'deepseek-chat' })
-      const events = await client.history(`vitest-${Date.now()}`)
-      expect(Array.isArray(events)).toBe(true)
+      const history = await client.history(`vitest-${Date.now()}`)
+      expect(Array.isArray(history.events)).toBe(true)
     } finally {
       await client.close()
     }
@@ -107,7 +107,7 @@ describe('HarnessRuntime integration (frozen dsh-py)', () => {
       await expect(restarted.listSessions()).resolves.toEqual(expect.arrayContaining([
         expect.objectContaining({ id: forkId, parentSessionId: sourceId }),
       ]))
-      await expect(restarted.history(forkId)).resolves.toEqual(expect.any(Array))
+      await expect(restarted.history(forkId)).resolves.toMatchObject({ events: expect.any(Array) })
     } finally {
       await restarted.close()
     }

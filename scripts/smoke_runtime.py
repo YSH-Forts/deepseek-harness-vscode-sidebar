@@ -17,27 +17,21 @@ from pathlib import Path
 
 def main() -> int:
     if len(sys.argv) != 2:
-        raise SystemExit("usage: smoke_runtime.py /path/to/dsh-py[.exe]")
+        raise SystemExit("usage: smoke_runtime.py /path/to/dsh[.exe]")
     executable = Path(sys.argv[1]).resolve()
     if not executable.is_file():
         raise SystemExit(f"runtime executable was not found: {executable}")
-
-    runtime_dir = executable.parent / "runtime"
-    ca_file = runtime_dir / "certifi" / "cacert.pem"
-    if not ca_file.is_file():
-        raise SystemExit(f"runtime CA bundle was not found: {ca_file}")
 
     data_dir = Path(tempfile.mkdtemp(prefix="dsh-runtime-smoke-"))
     env = {
         **os.environ,
         "DSH_CWD": str(Path.cwd()),
         "DSH_DATA_DIR": str(data_dir),
+        "DSH_HOME": str(data_dir),
         "DSH_SESSION_COMPRESSION": "none",
-        "SSL_CERT_FILE": str(ca_file),
-        "REQUESTS_CA_BUNDLE": str(ca_file),
     }
     process = subprocess.Popen(
-        [str(executable), "sdk"],
+        [str(executable), "--profile", "sdk"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,

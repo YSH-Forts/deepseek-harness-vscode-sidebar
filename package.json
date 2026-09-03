@@ -83,7 +83,7 @@
         "deepseekHarness.runtime.command": {
           "type": "string",
           "default": "",
-          "description": "DeepSeek Harness Python runtime executable. Leave empty to use the bundled runtime that ships with the extension."
+          "description": "DeepSeek Harness runtime executable. Leave empty to use the bundled native dsh runtime that ships with the extension."
         },
         "deepseekHarness.runtime.arguments": {
           "type": "array",
@@ -91,6 +91,7 @@
             "type": "string"
           },
           "default": [
+            "--profile",
             "sdk"
           ],
           "description": "Arguments for the runtime executable."

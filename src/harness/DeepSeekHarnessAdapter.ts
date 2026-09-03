@@ -23,7 +23,7 @@ export class DeepSeekHarnessAdapter implements HarnessAdapter {
     try {
       client.start()
       const initialized = await client.initialize({ cwd: this.launch.cwd, provider: this.launch.provider, model: this.launch.model })
-      if (initialized.serverInfo.name !== 'deepseek-harness-sdk-runtime' || initialized.serverInfo.version !== '0.1.0') {
+      if (initialized.serverInfo.name !== 'deepseek-harness-sdk-runtime') {
         throw new Error(`Incompatible DeepSeek Harness runtime: ${initialized.serverInfo.name}/${initialized.serverInfo.version}`)
       }
       this.client = client; this.setStatus({ state: 'ready', version: initialized.serverInfo.version })
