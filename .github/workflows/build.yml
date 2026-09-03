@@ -9,8 +9,8 @@ on:
 env:
   # The Python runtime source repository. PyInstaller cannot cross-compile, so
   # each platform build checks out this repo and builds dsh-py natively.
-  PYTHON_REPO: https://github.com/YSH-Forts/deepseek_harness.git
-  PYTHON_REF: main
+  PYTHON_REPO: https://github.com/yushenghai1106/deepseek-harness.git
+  PYTHON_REF: master
 
 jobs:
   build-runtime:
@@ -41,7 +41,7 @@ jobs:
       - name: Checkout runtime source
         uses: actions/checkout@v4
         with:
-          repository: YSH-Forts/deepseek_harness
+          repository: yushenghai1106/deepseek-harness
           ref: ${{ env.PYTHON_REF }}
           path: python-src
 
