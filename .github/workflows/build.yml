@@ -52,30 +52,34 @@ jobs:
           python -m pip install --upgrade pip
           pip install '.[dev]' pyinstaller
 
-      - name: Build dsh-py with PyInstaller
+      - name: Build portable dsh-py runtime bundle
         shell: bash
         run: |
           cd python-src/deepseek-harness-python
-          # Build without relying on dsh_py.spec (not committed upstream).
-          # Equivalent to the spec: entry __main__, pathex=src, collect data,
-          # exclude tkinter/test/unittest/pytest.
+          # PyInstaller cannot cross-compile. Build on the matching runner and
+          # preserve the complete onedir layout expected by the extension:
+          # bin/dsh-py/<binary> plus bin/dsh-py/runtime/.
           pyinstaller \
-            --clean --noconfirm --onefile \
+            --clean --noconfirm --onedir \
             --name dsh-py \
+            --contents-directory runtime \
             --paths src \
             --collect-data deepseek_harness_py \
+            --collect-data certifi \
             --exclude-module tkinter \
             --exclude-module test \
             --exclude-module unittest \
             --exclude-module pytest \
             src/deepseek_harness_py/__main__.py
-          ls -la dist/
+          test -f "dist/dsh-py/${{ matrix.binary }}"
+          test -f "dist/dsh-py/runtime/certifi/cacert.pem"
+          ls -la "dist/dsh-py"
 
-      - name: Upload runtime binary
+      - name: Upload runtime bundle
         uses: actions/upload-artifact@v4
         with:
           name: runtime-${{ matrix.target }}
-          path: python-src/deepseek-harness-python/dist/${{ matrix.binary }}
+          path: python-src/deepseek-harness-python/dist
           if-no-files-found: error
 
   package:
@@ -103,14 +107,23 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Prepare bin directory (drop bundled dev binary)
-        run: rm -rf bin && mkdir -p bin
+      - name: Prepare target runtime directory
+        shell: bash
+        run: rm -rf bin runtime-artifact && mkdir -p bin
 
-      - name: Download runtime binary
+      - name: Download target runtime bundle
         uses: actions/download-artifact@v4
         with:
           name: runtime-${{ matrix.target }}
-          path: bin/
+          path: runtime-artifact
+
+      - name: Install target runtime bundle
+        shell: bash
+        run: |
+          test -f "runtime-artifact/dsh-py/${{ matrix.binary }}"
+          cp -R runtime-artifact/dsh-py bin/
+          if [ "${{ matrix.target }}" != "win32-x64" ]; then chmod +x "bin/dsh-py/${{ matrix.binary }}"; fi
+          test -f "bin/dsh-py/runtime/certifi/cacert.pem"
 
       - name: Install npm dependencies
         run: npm ci
