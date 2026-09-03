@@ -131,8 +131,13 @@ jobs:
       - name: Build extension
         run: npm run build
 
+      - name: Read extension version
+        id: extension-version
+        shell: bash
+        run: echo "value=$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
+
       - name: Package VSIX
-        run: npx vsce package --target ${{ matrix.target }} --out deepseek-harness-vscode-${{ matrix.target }}-${{ github.ref_name }}.vsix
+        run: npx vsce package --target ${{ matrix.target }} --out deepseek-harness-vscode-${{ matrix.target }}-${{ steps.extension-version.outputs.value }}.vsix
 
       - name: Upload VSIX
         uses: actions/upload-artifact@v4
