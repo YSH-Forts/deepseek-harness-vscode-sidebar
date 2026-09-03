@@ -30,9 +30,14 @@ jobs:
             os: windows-latest
             binary: dsh-py.exe
           - target: linux-x64
-            os: ubuntu-latest
+            # Pin the ABI baseline instead of inheriting a newer glibc whenever
+            # GitHub advances ubuntu-latest.
+            os: ubuntu-22.04
             binary: dsh-py
     steps:
+      - name: Checkout extension source
+        uses: actions/checkout@v4
+
       - name: Checkout runtime source
         uses: actions/checkout@v4
         with:
@@ -74,6 +79,10 @@ jobs:
           test -f "dist/dsh-py/${{ matrix.binary }}"
           test -f "dist/dsh-py/runtime/certifi/cacert.pem"
           ls -la "dist/dsh-py"
+
+      - name: Smoke test packaged runtime
+        shell: bash
+        run: python scripts/smoke_runtime.py "python-src/deepseek-harness-python/dist/dsh-py/${{ matrix.binary }}"
 
       - name: Upload runtime bundle
         uses: actions/upload-artifact@v4

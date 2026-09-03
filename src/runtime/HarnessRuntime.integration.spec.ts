@@ -9,12 +9,14 @@ import { HarnessEventMapper } from '../harness/HarnessEventMapper.ts'
 // Locate the bundled runtime binary. Prefer the checked-in bin/ (source tree),
 // fall back to the installed extension location.
 const here = dirname(fileURLToPath(import.meta.url))
+const binary = process.platform === 'win32' ? 'dsh-py.exe' : 'dsh-py'
 const candidates = [
-  join(here, '..', '..', 'bin', process.platform === 'win32' ? 'dsh-py.exe' : 'dsh-py'),
-  join(homedir(), '.cursor', 'extensions', 'deepseek-harness.deepseek-harness-vscode-0.1.1', 'bin', 'dsh-py'),
-  join(homedir(), '.vscode', 'extensions', 'deepseek-harness.deepseek-harness-vscode-0.1.1', 'bin', 'dsh-py'),
-  join(homedir(), '.cursor', 'extensions', 'deepseek-harness.deepseek-harness-vscode-0.1.0', 'bin', 'dsh-py'),
-  join(homedir(), '.vscode', 'extensions', 'deepseek-harness.deepseek-harness-vscode-0.1.0', 'bin', 'dsh-py'),
+  join(here, '..', '..', 'bin', 'dsh-py', binary),
+  join(here, '..', '..', 'bin', binary), // legacy one-file local runtime
+  join(homedir(), '.cursor', 'extensions', 'deepseek-harness.deepseek-harness-vscode-0.1.1', 'bin', 'dsh-py', binary),
+  join(homedir(), '.vscode', 'extensions', 'deepseek-harness.deepseek-harness-vscode-0.1.1', 'bin', 'dsh-py', binary),
+  join(homedir(), '.cursor', 'extensions', 'deepseek-harness.deepseek-harness-vscode-0.1.0', 'bin', 'dsh-py', binary),
+  join(homedir(), '.vscode', 'extensions', 'deepseek-harness.deepseek-harness-vscode-0.1.0', 'bin', 'dsh-py', binary),
 ]
 
 const RUNTIME = candidates.find(existsSync)

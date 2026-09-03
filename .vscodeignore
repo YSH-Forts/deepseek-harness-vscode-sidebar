@@ -1,6 +1,7 @@
 .vscode/**
 .gitignore
 src/**
+scripts/**
 docs/**
 node_modules/**
 .workbuddy/**
