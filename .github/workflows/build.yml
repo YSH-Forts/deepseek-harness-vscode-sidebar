@@ -132,7 +132,8 @@ jobs:
       - name: Read extension version
         id: extension-version
         shell: bash
-        run: echo "value=$(node -p \"require('./package.json').version\")" >> "$GITHUB_OUTPUT"
+        run: |
+          node -e "console.log('value=' + require('./package.json').version)" >> "$GITHUB_OUTPUT"
 
       - name: Package VSIX
         run: npx vsce package --target ${{ matrix.target }} --out deepseek-harness-vscode-${{ matrix.target }}-${{ steps.extension-version.outputs.value }}.vsix
