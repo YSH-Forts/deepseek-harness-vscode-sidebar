@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.3
+
+- Adds native VSIX packages for macOS Apple Silicon, macOS Intel, Windows x64, and Linux x64.
+- Updates the bundled runtime layout to `bin/dsh` for every platform.
+
 ## 0.1.1
 
 - Adds persistent Fork session recovery and branch markers.
